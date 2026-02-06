@@ -16,14 +16,21 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.2"
+          ruby-version: "4.0"
 
       - name: Install dependencies
         run: bundle install
 
+      - name: Debug repo context
+        run: |
+          pwd
+          ls -a
+          git rev-parse --show-toplevel || true
+          git status -sb || true
+
       - name: Run tests with Lumitrace
         env:
-          LUMITRACE_GIT_DIFF: "range:origin/${{ github.base_ref || HEAD~1 }}...HEAD"
+          LUMITRACE_GIT_DIFF: ${{ github.event_name == 'pull_request' && format('range:origin/{0}...HEAD', github.base_ref) || 'range:HEAD~1...HEAD' }}
           LUMITRACE_HTML_OUT: "${{ github.workspace }}/lumitrace_recorded.html"
         run: RUBYOPT='-r lumitrace/enable_git_diff' bundle exec rake test
 

@@ -58,12 +58,10 @@ def lumitrace_git_root(dir, git_cmd)
 end
 
 def lumitrace_diff_ranges
-  target = File.expand_path($PROGRAM_NAME)
-  base_dir = File.dirname(target)
+  base_dir = Dir.pwd
   git_cmd = ENV.fetch("LUMITRACE_GIT_CMD", "git")
   root = lumitrace_git_root(base_dir, git_cmd)
   args = [git_cmd, "-C", base_dir, "diff", "--unified=0", "--no-color"] + lumitrace_diff_args
-  args += ["--", target] if File.file?(target)
   stdout, status = Open3.capture2(*args)
   return nil unless status.success?
   ranges_by_file = lumitrace_parse_git_diff_ranges(stdout, root)
