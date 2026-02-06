@@ -9,6 +9,6 @@ class SampleProjectTest < Minitest::Test
   end
 
   def test_foo
-    assert_equal 42, 1 + 2 * 3
+    assert_equal 42, 30 + 3 * 4
   end
 end

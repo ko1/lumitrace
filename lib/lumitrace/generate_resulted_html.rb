@@ -287,11 +287,7 @@ module GenerateResultedHtml
     by_file = events.group_by { |e| e[:file] }
     ranges_by_file = normalize_ranges_by_file(ranges_by_file)
 
-    target_paths = if ranges_by_file
-      ranges_by_file.keys
-    else
-      by_file.keys
-    end
+    target_paths = by_file.keys
 
     sections = target_paths.sort.map do |path|
       next unless File.exist?(path)

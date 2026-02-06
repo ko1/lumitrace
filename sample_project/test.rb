@@ -7,3 +7,4 @@ def compute(x)
 end
 
 puts compute(5)
+p :ok
