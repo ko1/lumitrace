@@ -8,7 +8,6 @@ require_relative "../lib/lumitrace"
 class LumiTraceTest < Minitest::Test
   def test_namespaces_loaded
     assert defined?(Lumitrace::RecordInstrument)
-    assert defined?(Lumitrace::RecordRequire)
     assert defined?(Lumitrace::GenerateResultedHtml)
   end
 
@@ -27,23 +26,23 @@ class LumiTraceTest < Minitest::Test
   end
 
   def test_render_all_generates_html
-    events = [
-      {
-        "file" => "/tmp/sample.rb",
-        "start_line" => 1,
-        "start_col" => 0,
-        "end_line" => 1,
-        "end_col" => 5,
-        "values" => ["ok"],
-        "total" => 1
-      }
-    ]
-
     Dir.mktmpdir do |dir|
       path = File.join(dir, "lumitrace_events.json")
       sample = File.join(dir, "sample.rb")
+      events = [
+        {
+          "file" => sample,
+          "start_line" => 1,
+          "start_col" => 0,
+          "end_line" => 1,
+          "end_col" => 5,
+          "values" => ["ok"],
+          "total" => 1
+        }
+      ]
+
       File.write(path, JSON.dump(events))
-      File.write(sample, "puts 'hi'\n")
+      File.write(sample, "puts hi\n")
 
       html = Lumitrace::GenerateResultedHtml.render_all(path, root: dir)
       assert_includes html, "Recorded Result View"
@@ -68,11 +67,10 @@ class LumiTraceTest < Minitest::Test
 
       File.write(main, <<~RUBY)
         require_relative "./sub"
-        v = sub_value(10)
-        v
+        sub_value(10)
       RUBY
 
-      Lumitrace::RecordRequire.enable(max_values: 3)
+      Lumitrace.enable!(max_values: 3, at_exit: false)
       Lumitrace::RecordInstrument.instance_variable_set(:@events_by_key, {})
 
       load main

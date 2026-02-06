@@ -10,7 +10,7 @@ module Lumitrace
   @atexit_output_root = nil
   @atexit_ranges_by_file = nil
 
-  def self.enable!(max_values: nil, ranges_by_file: nil, at_exit: true)
+  def self.enable!(max_values: ENV["LUMITRACE_VALUES_MAX"], ranges_by_file: nil, at_exit: true)
     require_relative "lumitrace/record_require"
     RecordRequire.enable(max_values: max_values, ranges_by_file: ranges_by_file)
     if at_exit
@@ -19,6 +19,9 @@ module Lumitrace
       unless @atexit_registered
         at_exit do
           next unless RecordRequire.enabled?
+          if ENV["LUMITRACE_JSON_OUT"] && !ENV["LUMITRACE_JSON_OUT"].empty?
+            RecordInstrument.dump_json(File.expand_path(ENV["LUMITRACE_JSON_OUT"], @atexit_output_root))
+          end
           events = RecordInstrument.events
           html = GenerateResultedHtml.render_all_from_events(
             events,
@@ -36,13 +39,5 @@ module Lumitrace
   def self.disable!
     return unless defined?(RecordRequire)
     RecordRequire.disable
-  end
-
-  def self.dump!(path = nil)
-    if path
-      RecordInstrument.dump_json(path)
-    else
-      RecordInstrument.dump_json
-    end
   end
 end
