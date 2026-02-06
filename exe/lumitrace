@@ -2,31 +2,87 @@
 # frozen_string_literal: true
 
 require "json"
-require_relative "../lib/lumitrace/record_require"
-require_relative "../lib/lumitrace/generate_resulted_html"
+require "optparse"
+require_relative "../lib/lumitrace"
 
-args = ARGV.dup
-path = args.shift or abort "usage: lumitrace FILE [--html [out.html]] [--max N]"
 html_out = nil
 max_values = nil
-if args[0] == "--html"
-  args.shift
-  html_out = args.shift || File.join(File.dirname(path), "recorded.html")
+range_specs = []
+json_out = nil
+
+emit_html = true
+
+parser = OptionParser.new do |opts|
+  opts.banner = "usage: lumitrace FILE [options]"
+  opts.on("--html PATH", "Write HTML output to PATH") do |v|
+    emit_html = true
+    html_out = v
+  end
+  opts.on("--json [PATH]", "Write JSON output (default: lumitrace_recorded.json)") do |v|
+    json_out = v || ""
+  end
+  opts.on("--max N", Integer, "Max values per expression") do |v|
+    max_values = v
+  end
+  opts.on("--range SPEC", "Restrict instrumentation per file: FILE:1-5,10-12") do |v|
+    range_specs << v
+  end
+  opts.on("-h", "--help", "Show help") do
+    puts opts
+    exit 0
+  end
 end
-if args[0] == "--max"
-  args.shift
-  max_values = args.shift
-end
+
+args = parser.parse(ARGV)
+path = args.shift or abort(parser.to_s)
+
 env_max = ENV["LUMITRACE_VALUES_MAX"]
 max_values = env_max if max_values.nil? && env_max && !env_max.empty?
 
-Lumitrace::RecordRequire.enable(max_values: max_values)
-load File.expand_path(path)
-json_path = File.expand_path("record_events.json", __dir__)
-puts "recorded: #{json_path}"
+ranges_by_file = nil
+if range_specs.any?
+  ranges_by_file = Hash.new { |h, k| h[k] = [] }
+  range_specs.each do |spec|
+    file_part, range_part = spec.split(":", 2)
+    if file_part.nil? || file_part.strip.empty?
+      abort "invalid --range (expected FILE or FILE:1-5,10-12): #{spec}"
+    end
 
-if html_out
-  html = Lumitrace::GenerateResultedHtml.render_all(json_path, root: File.dirname(File.expand_path(path)))
-  File.write(html_out, html)
-  puts "html: #{html_out}"
+    file = File.expand_path(file_part)
+    if range_part.nil? || range_part.strip.empty?
+      ranges_by_file[file] = []
+      next
+    end
+
+    range_part.split(",").each do |seg|
+      seg = seg.strip
+      if seg =~ /\A(\d+)-(\d+)\z/
+        ranges_by_file[file] << ($1.to_i..$2.to_i)
+      else
+        abort "invalid --range segment (expected N-M): #{seg}"
+      end
+    end
+  end
+end
+
+Lumitrace.enable!(max_values: max_values, ranges_by_file: ranges_by_file)
+load File.expand_path(path)
+events = Lumitrace::RecordInstrument.events
+
+if json_out
+  json_path = json_out.empty? ? "lumitrace_recorded.json" : json_out
+  events_path = File.expand_path(json_path, Dir.pwd)
+  Lumitrace.dump!(events_path)
+  puts "recorded: #{events_path}"
+end
+
+if emit_html
+  html = Lumitrace::GenerateResultedHtml.render_all_from_events(
+    events,
+    root: File.dirname(File.expand_path(path)),
+    ranges_by_file: ranges_by_file
+  )
+  out_path = html_out || File.join(File.dirname(File.expand_path(path)), "lumitrace_recorded.html")
+  File.write(out_path, html)
+  puts "html: #{out_path}"
 end

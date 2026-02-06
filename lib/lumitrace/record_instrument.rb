@@ -41,7 +41,7 @@ module RecordInstrument
     Prism::GlobalVariableReadNode
   ].freeze
 
-  def self.instrument_source(src, ranges, file_label: nil, record_method: "RecordInstrument.expr_record")
+  def self.instrument_source(src, ranges, file_label: nil, record_method: "Lumitrace::RecordInstrument.expr_record")
     file_label ||= "(unknown)"
     ranges = normalize_ranges(ranges)
 
@@ -57,15 +57,15 @@ module RecordInstrument
 
   def self.collect_inserts(root, src, ranges, file_label, record_method)
     inserts = []
-    stack = [root]
+    stack = [[root, nil]]
 
     until stack.empty?
-      node = stack.pop
+      node, parent = stack.pop
       next unless node
 
       if node.respond_to?(:location)
         line = node.location.start_line
-        if in_ranges?(line, ranges) && wrap_expr?(node)
+        if in_ranges?(line, ranges) && wrap_expr?(node, parent)
           loc = expr_location(node)
           prefix = "#{record_method}(\"#{file_label}\", #{loc[:start_line]}, #{loc[:start_col]}, #{loc[:end_line]}, #{loc[:end_col]}, ("
           suffix = "))"
@@ -75,7 +75,7 @@ module RecordInstrument
         end
       end
 
-      stack.concat(node.child_nodes)
+      node.child_nodes.each { |child| stack << [child, node] }
     end
 
     inserts
@@ -113,10 +113,14 @@ module RecordInstrument
     LITERAL_NODE_CLASSES.include?(node.class)
   end
 
-  def self.wrap_expr?(node)
+  def self.wrap_expr?(node, parent = nil)
     return false unless node.respond_to?(:location)
     return false if literal_value_node?(node)
     return false if node.is_a?(Prism::CallNode) && has_block_with_body?(node)
+    if node.is_a?(Prism::ConstantReadNode) &&
+       (parent.is_a?(Prism::ClassNode) || parent.is_a?(Prism::ModuleNode))
+      return false
+    end
     WRAP_NODE_CLASSES.include?(node.class)
   end
 
@@ -154,7 +158,6 @@ module RecordInstrument
 
   @events_by_key = {}
   @max_values_per_expr = 3
-  @default_output = File.expand_path("record_events.json", __dir__)
 
   def self.max_values_per_expr=(n)
     @max_values_per_expr = n.to_i if n && n.to_i > 0
@@ -184,15 +187,30 @@ module RecordInstrument
     value
   end
 
-  def self.dump_json(path = @default_output)
+  def self.dump_json(path = nil)
+    path ||= File.expand_path("lumitrace_recorded.json", Dir.pwd)
     File.write(path, JSON.dump(@events_by_key.values))
     path
+  end
+
+  def self.events
+    @events_by_key.values.map do |e|
+      {
+        file: e[:file],
+        start_line: e[:start_line],
+        start_col: e[:start_col],
+        end_line: e[:end_line],
+        end_col: e[:end_col],
+        values: e[:values].dup,
+        total: e[:total]
+      }
+    end
   end
 
   def self.safe_value(v)
     case v
     when String
-      v.bytesize > 200 ? v[0, 200] + "..." : v
+      v.bytesize > 1000 ? v[0, 1000] + "..." : v
     when Numeric, TrueClass, FalseClass, NilClass
       v
     else
@@ -205,7 +223,7 @@ end
 if $PROGRAM_NAME == __FILE__
   path = ARGV[0] or abort "usage: ruby record_instrument.rb FILE RANGES_JSON [record_method] [out_path]"
   ranges = JSON.parse(ARGV[1] || "[]")
-  record_method = ARGV[2] || "RecordInstrument.expr_record"
+  record_method = ARGV[2] || "Lumitrace::RecordInstrument.expr_record"
   out = RecordInstrument.instrument_source(File.read(path), ranges, file_label: path, record_method: record_method)
 
   if ARGV[3]

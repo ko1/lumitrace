@@ -8,17 +8,54 @@ module RecordRequire
   @processed = {}
   @root = File.expand_path(ENV.fetch("LUMITRACE_ROOT", Dir.pwd))
   @tool_root = File.expand_path(__dir__)
-  @tool_files = %w[
-    record_instrument.rb
-    record_require.rb
-    generate_resulted_html.rb
-  ].map { |f| File.expand_path(f, @tool_root) }.to_h { |p| [p, true] }
-  @tool_files[File.expand_path("../../exe/lumitrace", __dir__)] = true
+  @ranges_by_file = {}
+  @ranges_filtering = false
 
-  def self.enable(max_values: nil)
+  def self.enable(max_values: nil, ranges_by_file: nil)
     return if @enabled
     RecordInstrument.max_values_per_expr = max_values if max_values
+    if ranges_by_file
+      @ranges_by_file = normalize_ranges_by_file(ranges_by_file)
+      @ranges_filtering = true
+    else
+      @ranges_by_file = {}
+      @ranges_filtering = false
+    end
     @enabled = true
+  end
+
+  def self.ranges_for(path)
+    return [] unless @ranges_filtering
+    @ranges_by_file[File.expand_path(path)] || []
+  end
+
+  def self.ranges_filtering?
+    @ranges_filtering
+  end
+
+  def self.listed_file?(path)
+    @ranges_by_file.key?(File.expand_path(path))
+  end
+
+  def self.normalize_ranges_by_file(input)
+    return {} unless input
+    input.each_with_object({}) do |(file, ranges), h|
+      next unless file
+      abs = File.expand_path(file)
+      if ranges.nil? || ranges.empty?
+        h[abs] = []
+      else
+        h[abs] = ranges.map { |r| [r.begin, r.end] }
+      end
+    end
+  end
+
+  def self.disable
+    @enabled = false
+  end
+
+  def self.enabled?
+    @enabled
   end
 
   def self.in_root?(path)
@@ -28,7 +65,7 @@ module RecordRequire
 
   def self.excluded?(path)
     abs = File.expand_path(path)
-    @tool_files[abs]
+    abs.start_with?(@tool_root + File::SEPARATOR)
   end
 
   def self.already_processed?(path)
@@ -48,13 +85,20 @@ if defined?(RubyVM::InstructionSequence)
       end
 
       def translate(iseq)
+        return recordrequire_orig_translate(iseq) if respond_to?(:recordrequire_orig_translate) && !RecordRequire.enabled?
         path = iseq.path
-        if RecordRequire.in_root?(path) && !RecordRequire.excluded?(path) && !RecordRequire.already_processed?(path) &&
+        abs = File.expand_path(path)
+        if RecordRequire.in_root?(abs) && !RecordRequire.excluded?(abs) && !RecordRequire.already_processed?(abs) &&
            (iseq.label == "<main>" || iseq.label == "<top (required)>")
-          RecordRequire.mark_processed(path)
-          src = File.read(path)
-          modified = RecordInstrument.instrument_source(src, [], file_label: path)
-          return RubyVM::InstructionSequence.compile(modified, path)
+          if RecordRequire.ranges_filtering? && !RecordRequire.listed_file?(abs)
+            return recordrequire_orig_translate(iseq) if respond_to?(:recordrequire_orig_translate)
+            return nil
+          end
+          RecordRequire.mark_processed(abs)
+          src = File.read(abs)
+          ranges = RecordRequire.ranges_for(abs)
+          modified = RecordInstrument.instrument_source(src, ranges, file_label: abs)
+          return RubyVM::InstructionSequence.compile(modified, abs)
         end
         return recordrequire_orig_translate(iseq) if respond_to?(:recordrequire_orig_translate)
         nil
@@ -63,7 +107,4 @@ if defined?(RubyVM::InstructionSequence)
   end
 end
 
-at_exit do
-  RecordInstrument.dump_json
-end
 end

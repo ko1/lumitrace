@@ -2,7 +2,7 @@ require "json"
 
 module Lumitrace
 module GenerateResultedHtml
-  def self.render(source_path, events_path)
+  def self.render(source_path, events_path, ranges: nil)
     unless File.exist?(events_path)
       abort "missing #{events_path}"
     end
@@ -14,9 +14,11 @@ module GenerateResultedHtml
     events = normalize_events(raw_events)
 
     src_lines = File.read(source_path).lines
+    ranges = normalize_ranges(ranges)
 
     html_lines = src_lines.each_with_index.map do |line, idx|
       lineno = idx + 1
+      next if ranges && !line_in_ranges?(lineno, ranges)
       line_text = line.chomp
       evs = aggregate_events_for_line(events, lineno, line_text.length)
 
@@ -26,7 +28,7 @@ module GenerateResultedHtml
         rendered = render_line_with_events(line_text, evs)
         "<span class=\"line hit\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
       end
-    end
+    end.compact
 
     <<~HTML
       <!doctype html>
@@ -218,12 +220,17 @@ module GenerateResultedHtml
   def self.normalize_events(events)
     merged = {}
     events.each do |e|
+      file = e["file"] || e[:file]
+      start_line = e["start_line"] || e[:start_line]
+      start_col = e["start_col"] || e[:start_col]
+      end_line = e["end_line"] || e[:end_line]
+      end_col = e["end_col"] || e[:end_col]
       key = [
-        e["file"],
-        e["start_line"].to_i,
-        e["start_col"].to_i,
-        e["end_line"].to_i,
-        e["end_col"].to_i
+        file,
+        start_line.to_i,
+        start_col.to_i,
+        end_line.to_i,
+        end_col.to_i
       ]
       entry = (merged[key] ||= {
         key: key,
@@ -236,32 +243,72 @@ module GenerateResultedHtml
         total: 0
       })
 
-      vals = e["values"] || [e["value"]].compact
+      vals = e["values"] || e[:values] || [e["value"] || e[:value]].compact
       entry[:values].concat(vals)
-      entry[:total] += (e["total"] || vals.length)
+      entry[:total] += (e["total"] || e[:total] || vals.length)
     end
     merged.values
   end
 
-  def self.render_all(events_path, root: Dir.pwd)
+  def self.normalize_ranges(ranges)
+    return nil unless ranges
+    ranges.map do |r|
+      a = (r.respond_to?(:begin) ? r.begin : r[0]).to_i
+      b = (r.respond_to?(:end) ? r.end : r[1]).to_i
+      a <= b ? [a, b] : [b, a]
+    end
+  end
+
+  def self.normalize_ranges_by_file(input)
+    return nil unless input
+    input.each_with_object({}) do |(file, ranges), h|
+      abs = File.expand_path(file)
+      if ranges.nil? || ranges.empty?
+        h[abs] = []
+      else
+        h[abs] = normalize_ranges(ranges)
+      end
+    end
+  end
+
+  def self.line_in_ranges?(line, ranges)
+    return true if ranges.empty?
+    ranges.any? { |(s, e)| line >= s && line <= e }
+  end
+
+  def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil)
     raw_events = JSON.parse(File.read(events_path))
     events = normalize_events(raw_events)
-    by_file = events.group_by { |e| e[:file] }
+    render_all_from_events(events, root: root, ranges_by_file: ranges_by_file)
+  end
 
-    sections = by_file.keys.sort.map do |path|
+  def self.render_all_from_events(events, root: Dir.pwd, ranges_by_file: nil)
+    events = normalize_events(events)
+    by_file = events.group_by { |e| e[:file] }
+    ranges_by_file = normalize_ranges_by_file(ranges_by_file)
+
+    target_paths = if ranges_by_file
+      ranges_by_file.keys
+    else
+      by_file.keys
+    end
+
+    sections = target_paths.sort.map do |path|
       next unless File.exist?(path)
       src = File.read(path)
+      ranges = ranges_by_file ? (ranges_by_file[path] || []) : nil
       html_lines = src.lines.each_with_index.map do |line, idx|
         lineno = idx + 1
+        next if ranges && !line_in_ranges?(lineno, ranges)
         line_text = line.chomp
-        evs = aggregate_events_for_line(by_file[path], lineno, line_text.length)
+        evs = aggregate_events_for_line(by_file[path] || [], lineno, line_text.length)
         if evs.empty?
           "<span class=\"line\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
         else
           rendered = render_line_with_events(line_text, evs)
           "<span class=\"line hit\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
         end
-      end
+      end.compact
 
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
       <<~HTML

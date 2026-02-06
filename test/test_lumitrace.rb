@@ -22,8 +22,8 @@ class LumiTraceTest < Minitest::Test
 
     out = Lumitrace::RecordInstrument.instrument_source(src, [], file_label: "sample.rb")
 
-    assert_includes out, "RecordInstrument.expr_record(\"sample.rb\", 2, 7,"
-    assert_includes out, "RecordInstrument.expr_record(\"sample.rb\", 2, 11,"
+    assert_includes out, "Lumitrace::RecordInstrument.expr_record(\"sample.rb\", 2, 7,"
+    assert_includes out, "Lumitrace::RecordInstrument.expr_record(\"sample.rb\", 2, 11,"
   end
 
   def test_render_all_generates_html
