@@ -1,0 +1,38 @@
+name: Lumitrace Sample
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  run-lumitrace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Run tests with Lumitrace
+        env:
+          LUMITRACE_GIT_DIFF: "range:origin/${{ github.base_ref || HEAD~1 }}...HEAD"
+          LUMITRACE_HTML_OUT: "${{ github.workspace }}/lumitrace_recorded.html"
+        run: RUBYOPT='-r lumitrace/enable_git_diff' bundle exec rake test
+
+      - name: Upload Lumitrace HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumitrace-recorded-html
+          path: lumitrace_recorded.html
+
+      - name: Artifact URL
+        run: |
+          echo "Artifact URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY

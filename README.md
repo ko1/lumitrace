@@ -4,35 +4,77 @@ Lumitrace instruments Ruby source code at load time, records expression results,
 
 ## How It Works
 
-Lumitrace hooks `RubyVM::InstructionSequence.translate` (when available) to rewrite files at require-time. It records expression results into `record_events.json`, keeping only the last N values per expression to avoid huge output. The HTML renderer aggregates results across files and shows them inline.
+Lumitrace hooks `RubyVM::InstructionSequence.translate` (when available) to rewrite files at require-time. It records expression results and renders an HTML view that shows them inline. Only the last N values per expression are kept to avoid huge output.
 
 ## Usage
 
-Run a script and emit HTML:
+### CLI
+
+Run a script and emit HTML (default output: `lumitrace_recorded.html`):
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --html
+ruby exe/lumitrace path/to/entry.rb
 ```
 
 Limit the number of recorded values per expression (defaults to 3):
 
 ```bash
-LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb --html
+LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb
 ```
 
-By default, Lumitrace instruments files under the current working directory. Files outside the root are ignored. You can override the root with `LUMITRACE_ROOT`.
+Write JSON output explicitly:
+
+```bash
+ruby exe/lumitrace path/to/entry.rb --json
+ruby exe/lumitrace path/to/entry.rb --json out/lumitrace_recorded.json
+```
+
+Restrict to specific line ranges:
+
+```bash
+ruby exe/lumitrace path/to/entry.rb --range path/to/entry.rb:10-20,30-35
+```
+
+### Library
+
+Enable instrumentation and HTML output at exit:
+
+```ruby
+require "lumitrace"
+Lumitrace.enable!
+```
+
+Enable only for diff ranges (current file):
+
+```ruby
+require "lumitrace/enable_git_diff"
+```
+
+If you want to enable via a single require:
+
+```ruby
+require "lumitrace/enable"
+```
 
 ## Output
 
-Running Lumitrace produces:
+- HTML: `lumitrace_recorded.html` by default, override with `LUMITRACE_HTML_OUT`.
+- JSON: written only when `--json` (CLI) or `LUMITRACE_JSON_OUT` (library) is provided. Default filename is `lumitrace_recorded.json`.
 
-- `record_events.json` (JSON results, aggregated per expression)
-- `recorded.html` (HTML view, if `--html` is passed)
+## Environment Variables
+
+- `LUMITRACE_VALUES_MAX`: default max values per expression (default 3 if unset).
+- `LUMITRACE_ROOT`: root directory used to decide which files are instrumented.
+- `LUMITRACE_HTML_OUT`: override HTML output path.
+- `LUMITRACE_JSON_OUT`: if set, writes JSON to this path at exit.
+- `LUMITRACE_GIT_DIFF=working|staged|base:REV|range:SPEC`: diff source for `enable_git_diff`.
+- `LUMITRACE_GIT_DIFF_CONTEXT=N`: expand diff hunks by +/-N lines (default 3).
+- `LUMITRACE_GIT_CMD`: git executable override (default `git`).
 
 ## Notes And Limitations
 
 - Requires `RubyVM::InstructionSequence.translate` support.
-- Very large projects or hot loops can still generate large JSON; use `RST_MAX`.
+- Very large projects or hot loops can still generate large HTML; use `LUMITRACE_VALUES_MAX`.
 - Instrumentation changes evaluation order for debugging, not for production.
 
 ## Development
@@ -46,5 +88,5 @@ bundle install
 Run the CLI locally:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --html
+ruby exe/lumitrace path/to/entry.rb
 ```
