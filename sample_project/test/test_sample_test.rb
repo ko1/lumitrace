@@ -11,4 +11,9 @@ class SampleProjectTest < Minitest::Test
   def test_foo
     assert_equal 42, 30 + 3 * 4
   end
+
+  def test_bar
+    assert_equal 43, 30 + 3 * 4 + 1
+  end
+
 end

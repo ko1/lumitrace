@@ -7,6 +7,10 @@ on:
 jobs:
   run-lumitrace:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,7 +36,12 @@ jobs:
         env:
           LUMITRACE_GIT_DIFF: ${{ github.event_name == 'pull_request' && format('range:origin/{0}...HEAD', github.base_ref) || 'range:HEAD~1...HEAD' }}
           LUMITRACE_HTML_OUT: "${{ github.workspace }}/lumitrace_recorded.html"
-        run: RUBYOPT='-r lumitrace/enable_git_diff' bundle exec rake test
+        run: bundle exec ruby -r lumitrace/enable_git_diff test/test_sample_test.rb
+
+      - name: Prepare Pages content
+        run: |
+          mkdir -p public
+          cp lumitrace_recorded.html public/index.html
 
       - name: Upload Lumitrace HTML
         uses: actions/upload-artifact@v4
@@ -40,6 +49,19 @@ jobs:
           name: lumitrace-recorded-html
           path: lumitrace_recorded.html
 
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+          name: lumitrace-pages
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: lumitrace-pages
+
       - name: Artifact URL
         run: |
           echo "Artifact URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "Pages URL: ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
