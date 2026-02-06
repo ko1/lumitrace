@@ -1,0 +1,216 @@
+require "json"
+require "prism"
+
+module Lumitrace
+module RecordInstrument
+  SKIP_NODE_CLASSES = [
+    Prism::DefNode,
+    Prism::ClassNode,
+    Prism::ModuleNode,
+    Prism::IfNode,
+    Prism::UnlessNode,
+    Prism::WhileNode,
+    Prism::UntilNode,
+    Prism::ForNode,
+    Prism::CaseNode,
+    Prism::BeginNode,
+    Prism::RescueNode,
+    Prism::EnsureNode,
+    Prism::AliasMethodNode,
+    Prism::UndefNode
+  ].freeze
+
+  LITERAL_NODE_CLASSES = [
+    Prism::IntegerNode,
+    Prism::FloatNode,
+    Prism::RationalNode,
+    Prism::ImaginaryNode,
+    Prism::StringNode,
+    Prism::SymbolNode,
+    Prism::TrueNode,
+    Prism::FalseNode,
+    Prism::NilNode
+  ].freeze
+
+  WRAP_NODE_CLASSES = [
+    Prism::CallNode,
+    Prism::LocalVariableReadNode,
+    Prism::ConstantReadNode,
+    Prism::InstanceVariableReadNode,
+    Prism::ClassVariableReadNode,
+    Prism::GlobalVariableReadNode
+  ].freeze
+
+  def self.instrument_source(src, ranges, file_label: nil, record_method: "RecordInstrument.expr_record")
+    file_label ||= "(unknown)"
+    ranges = normalize_ranges(ranges)
+
+    parse = Prism.parse(src)
+    if parse.errors.any?
+      raise "parse errors: #{parse.errors.map(&:message).join(", ") }"
+    end
+
+    inserts = collect_inserts(parse.value, src, ranges, file_label, record_method)
+
+    apply_insertions(src, inserts)
+  end
+
+  def self.collect_inserts(root, src, ranges, file_label, record_method)
+    inserts = []
+    stack = [root]
+
+    until stack.empty?
+      node = stack.pop
+      next unless node
+
+      if node.respond_to?(:location)
+        line = node.location.start_line
+        if in_ranges?(line, ranges) && wrap_expr?(node)
+          loc = expr_location(node)
+          prefix = "#{record_method}(\"#{file_label}\", #{loc[:start_line]}, #{loc[:start_col]}, #{loc[:end_line]}, #{loc[:end_col]}, ("
+          suffix = "))"
+          span_len = loc[:end_offset] - loc[:start_offset]
+          inserts << { pos: loc[:start_offset], text: prefix, kind: :open, len: span_len }
+          inserts << { pos: loc[:end_offset], text: suffix, kind: :close, len: span_len }
+        end
+      end
+
+      stack.concat(node.child_nodes)
+    end
+
+    inserts
+  end
+
+  def self.normalize_ranges(ranges)
+    ranges.map do |r|
+      a = r[0].to_i
+      b = r[1].to_i
+      a <= b ? [a, b] : [b, a]
+    end
+  end
+
+  def self.in_ranges?(line, ranges)
+    return true if ranges.empty?
+    ranges.any? { |(s, e)| line >= s && line <= e }
+  end
+
+  def self.apply_insertions(src, inserts)
+    out = src.dup
+    kind_order = { open: 0, close: 1 }
+    inserts.sort_by do |i|
+      [
+        -i[:pos],
+        kind_order[i[:kind]],
+        i[:kind] == :open ? i[:len] : -i[:len]
+      ]
+    end.each do |i|
+      out.insert(i[:pos], i[:text])
+    end
+    out
+  end
+
+  def self.literal_value_node?(node)
+    LITERAL_NODE_CLASSES.include?(node.class)
+  end
+
+  def self.wrap_expr?(node)
+    return false unless node.respond_to?(:location)
+    return false if literal_value_node?(node)
+    return false if node.is_a?(Prism::CallNode) && has_block_with_body?(node)
+    WRAP_NODE_CLASSES.include?(node.class)
+  end
+
+  def self.expr_location(node)
+    loc = node.location
+    return {
+      start_offset: loc.start_offset,
+      end_offset: loc.start_offset + loc.length,
+      start_line: loc.start_line,
+      start_col: loc.start_column,
+      end_line: loc.end_line,
+      end_col: loc.end_column
+    } unless node.is_a?(Prism::CallNode)
+
+    best = loc
+    [node.arguments&.location, node.block&.location, node.closing_loc].compact.each do |l|
+      next unless l
+      best = l if (l.start_offset + l.length) >= (best.start_offset + best.length)
+    end
+
+    {
+      start_offset: loc.start_offset,
+      end_offset: best.start_offset + best.length,
+      start_line: loc.start_line,
+      start_col: loc.start_column,
+      end_line: best.end_line,
+      end_col: best.end_column
+    }
+  end
+
+  def self.has_block_with_body?(call_node)
+    block = call_node.child_nodes.find { |n| n.is_a?(Prism::BlockNode) }
+    block && block.body.is_a?(Prism::StatementsNode)
+  end
+
+  @events_by_key = {}
+  @max_values_per_expr = 3
+  @default_output = File.expand_path("record_events.json", __dir__)
+
+  def self.max_values_per_expr=(n)
+    @max_values_per_expr = n.to_i if n && n.to_i > 0
+  end
+
+  def self.max_values_per_expr
+    @max_values_per_expr
+  end
+
+  def self.expr_record(file, start_line, start_col, end_line, end_col, value)
+    key = [file, start_line, start_col, end_line, end_col]
+    entry = (@events_by_key[key] ||= {
+      file: file,
+      start_line: start_line,
+      start_col: start_col,
+      end_line: end_line,
+      end_col: end_col,
+      values: [],
+      total: 0
+    })
+
+    entry[:total] += 1
+    entry[:values] << safe_value(value)
+    if entry[:values].length > @max_values_per_expr
+      entry[:values].shift(entry[:values].length - @max_values_per_expr)
+    end
+    value
+  end
+
+  def self.dump_json(path = @default_output)
+    File.write(path, JSON.dump(@events_by_key.values))
+    path
+  end
+
+  def self.safe_value(v)
+    case v
+    when String
+      v.bytesize > 200 ? v[0, 200] + "..." : v
+    when Numeric, TrueClass, FalseClass, NilClass
+      v
+    else
+      v.inspect
+    end
+  end
+end
+end
+
+if $PROGRAM_NAME == __FILE__
+  path = ARGV[0] or abort "usage: ruby record_instrument.rb FILE RANGES_JSON [record_method] [out_path]"
+  ranges = JSON.parse(ARGV[1] || "[]")
+  record_method = ARGV[2] || "RecordInstrument.expr_record"
+  out = RecordInstrument.instrument_source(File.read(path), ranges, file_label: path, record_method: record_method)
+
+  if ARGV[3]
+    File.write(ARGV[3], out)
+  else
+    puts out
+  end
+end
