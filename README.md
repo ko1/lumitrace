@@ -20,10 +20,16 @@ Lumitrace hooks `RubyVM::InstructionSequence.translate` (when available) to rewr
 
 ### CLI
 
-Run a script and emit HTML (default output: `lumitrace_recorded.html`):
+Run a script and emit text output (default):
 
 ```bash
 ruby exe/lumitrace path/to/entry.rb
+```
+
+Emit HTML output:
+
+```bash
+ruby exe/lumitrace path/to/entry.rb --html
 ```
 
 Limit the number of recorded values per expression (defaults to 3):
@@ -68,18 +74,23 @@ require "lumitrace/enable"
 
 ## Output
 
-- HTML: `lumitrace_recorded.html` by default, override with `LUMITRACE_HTML_OUT`.
-- JSON: written only when `--json` (CLI) or `LUMITRACE_JSON_OUT` (library) is provided. Default filename is `lumitrace_recorded.json`.
+- Text: printed by default; use `--text PATH` to write to a file.
+- HTML: `lumitrace_recorded.html` by default, or `--html PATH`.
+- JSON: written only when `--json` (CLI) or `LUMITRACE_JSON` (library/CLI) is provided. Default filename is `lumitrace_recorded.json`.
 
 ## Environment Variables
 
 - `LUMITRACE_VALUES_MAX`: default max values per expression (default 3 if unset).
 - `LUMITRACE_ROOT`: root directory used to decide which files are instrumented.
-- `LUMITRACE_HTML_OUT`: override HTML output path.
-- `LUMITRACE_JSON_OUT`: if set, writes JSON to this path at exit.
+- `LUMITRACE_TEXT`: control text output. `1` forces text on, `0`/`false` disables. Any other value is treated as the text output path.
+- `LUMITRACE_HTML`: enable HTML output; `1` uses the default path, otherwise treats the value as the HTML output path. `0`/`false` disables.
+- `LUMITRACE_JSON`: enable JSON output; `1` uses the default path, otherwise treats the value as the JSON output path. `0`/`false` disables.
+- `LUMITRACE_ENABLE`: when `1`/`true`, `require "lumitrace"` will call `Lumitrace.enable!`. When set to a non-boolean string, it is parsed as CLI-style arguments and passed to `enable!`.
+- `LUMITRACE_VERBOSE`: when `1`/`true`, prints verbose logs to stderr.
 - `LUMITRACE_GIT_DIFF=working|staged|base:REV|range:SPEC`: diff source for `enable_git_diff`.
 - `LUMITRACE_GIT_DIFF_CONTEXT=N`: expand diff hunks by +/-N lines (default 3).
 - `LUMITRACE_GIT_CMD`: git executable override (default `git`).
+- `LUMITRACE_GIT_DIFF_UNTRACKED`: include untracked files in git diff ranges (`1` default). Set to `0` to exclude.
 
 ## Notes And Limitations
 

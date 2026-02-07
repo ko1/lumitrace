@@ -200,7 +200,7 @@ ruby exe/lumitrace path/to/entry.rb --verbose
 ruby exe/lumitrace path/to/entry.rb --json
 ```
 
-This creates `lumitrace_recorded.json` alongside the HTML.
+This creates `lumitrace_recorded.json`. HTML is written only when `--html` is also specified.
 
 ### Text output to stdout
 

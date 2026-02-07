@@ -200,7 +200,7 @@ ruby exe/lumitrace path/to/entry.rb --verbose
 ruby exe/lumitrace path/to/entry.rb --json
 ```
 
-`lumitrace_recorded.json` が HTML と同じ場所に生成されます。
+`lumitrace_recorded.json` が生成されます（HTML は `--html` を指定したときだけ出力されます）。
 
 ### stdout にテキスト出力
 
