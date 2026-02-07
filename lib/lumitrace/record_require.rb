@@ -6,14 +6,19 @@ module Lumitrace
 module RecordRequire
   @enabled = false
   @processed = {}
-  @root = File.expand_path(ENV.fetch("LUMITRACE_ROOT", Dir.pwd))
+  @root = File.expand_path(Dir.pwd)
   @tool_root = File.expand_path(__dir__)
   @ranges_by_file = {}
   @ranges_filtering = false
 
-  def self.enable(max_values: nil, ranges_by_file: nil)
+  def self.enable(max_values: nil, ranges_by_file: nil, root: nil)
     return if @enabled
     RecordInstrument.max_values_per_expr = max_values if max_values
+    if root && !root.to_s.strip.empty?
+      @root = File.expand_path(root.to_s)
+    else
+      @root = File.expand_path(ENV.fetch("LUMITRACE_ROOT", Dir.pwd))
+    end
     if ranges_by_file
       @ranges_by_file = normalize_ranges_by_file(ranges_by_file)
       @ranges_filtering = true
@@ -60,7 +65,8 @@ module RecordRequire
 
   def self.in_root?(path)
     abs = File.expand_path(path)
-    abs.start_with?(@root + File::SEPARATOR)
+    return true if @root == File::SEPARATOR
+    abs == @root || abs.start_with?(@root + File::SEPARATOR)
   end
 
   def self.excluded?(path)

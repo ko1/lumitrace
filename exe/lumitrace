@@ -3,17 +3,19 @@
 
 require "json"
 require "optparse"
-require_relative "../lib/lumitrace"
-
 html_out = nil
 max_values = nil
 range_specs = []
 json_out = nil
+root = ENV["LUMITRACE_ROOT"]
 
 emit_html = true
 
 parser = OptionParser.new do |opts|
   opts.banner = "usage: lumitrace FILE [options]"
+  opts.on("--root PATH", "Root directory for instrumentation/output headings") do |v|
+    root = v
+  end
   opts.on("--html PATH", "Write HTML output to PATH") do |v|
     emit_html = true
     html_out = v
@@ -35,6 +37,8 @@ end
 
 args = parser.parse(ARGV)
 path = args.shift or abort(parser.to_s)
+
+require_relative "../lib/lumitrace"
 
 env_max = ENV["LUMITRACE_VALUES_MAX"]
 max_values = env_max if max_values.nil? && env_max && !env_max.empty?
@@ -65,21 +69,22 @@ if range_specs.any?
   end
 end
 
-Lumitrace.enable!(max_values: max_values, ranges_by_file: ranges_by_file)
+root = File.expand_path(root) if root && !root.strip.empty?
+Lumitrace.enable!(max_values: max_values, ranges_by_file: ranges_by_file, root: root)
 load File.expand_path(path)
 events = Lumitrace::RecordInstrument.events
 
 if json_out
   json_path = json_out.empty? ? "lumitrace_recorded.json" : json_out
   events_path = File.expand_path(json_path, Dir.pwd)
-  Lumitrace.dump!(events_path)
+  Lumitrace::RecordInstrument.dump_json(events_path)
   puts "recorded: #{events_path}"
 end
 
 if emit_html
   html = Lumitrace::GenerateResultedHtml.render_all_from_events(
     events,
-    root: File.dirname(File.expand_path(path)),
+    root: root || File.dirname(File.expand_path(path)),
     ranges_by_file: ranges_by_file
   )
   out_path = html_out || File.join(File.dirname(File.expand_path(path)), "lumitrace_recorded.html")

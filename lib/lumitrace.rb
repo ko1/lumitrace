@@ -10,9 +10,9 @@ module Lumitrace
   @atexit_output_root = nil
   @atexit_ranges_by_file = nil
 
-  def self.enable!(max_values: ENV["LUMITRACE_VALUES_MAX"], ranges_by_file: nil, at_exit: true)
+  def self.enable!(max_values: ENV["LUMITRACE_VALUES_MAX"], ranges_by_file: nil, root: nil, at_exit: true)
     require_relative "lumitrace/record_require"
-    RecordRequire.enable(max_values: max_values, ranges_by_file: ranges_by_file)
+    RecordRequire.enable(max_values: max_values, ranges_by_file: ranges_by_file, root: root)
     if at_exit
       @atexit_output_root = Dir.pwd
       @atexit_ranges_by_file = ranges_by_file
@@ -40,4 +40,5 @@ module Lumitrace
     return unless defined?(RecordRequire)
     RecordRequire.disable
   end
+
 end

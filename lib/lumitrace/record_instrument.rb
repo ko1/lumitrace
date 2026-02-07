@@ -95,7 +95,7 @@ module RecordInstrument
   end
 
   def self.apply_insertions(src, inserts)
-    out = src.dup
+    out = src.dup.b
     kind_order = { open: 0, close: 1 }
     inserts.sort_by do |i|
       [
@@ -104,9 +104,9 @@ module RecordInstrument
         i[:kind] == :open ? i[:len] : -i[:len]
       ]
     end.each do |i|
-      out.insert(i[:pos], i[:text])
+      out.insert(i[:pos], i[:text].b)
     end
-    out
+    out.force_encoding(src.encoding)
   end
 
   def self.literal_value_node?(node)

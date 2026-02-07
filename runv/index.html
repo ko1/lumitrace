@@ -1,0 +1,982 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ruby.wasm Runner</title>
+  <meta name="description" content="Run Ruby.wasm in the browser and view annotated source results with Lumitrace-style inline values.">
+  <meta property="og:title" content="Ruby.wasm Runner">
+  <meta property="og:description" content="Run Ruby.wasm in the browser and view annotated source results with Lumitrace-style inline values.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://github.com/ko1/runv">
+  <meta property="og:see_also" content="https://github.com/ko1/runv">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=IBM+Plex+Mono:wght@400;600&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/ruby.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --panel: #ffffff;
+      --ink: #1e1d1b;
+      --accent: #cf4a2c;
+      --muted: #6f6a62;
+      --line: #d9d1c6;
+      --ok: #1f7a4f;
+      --bad: #a6362a;
+      --editor-min: clamp(120px, 24vh, 320px);
+      --output-min: clamp(120px, 20vh, 160px);
+      --annotated-min: clamp(200px, 38vh, 360px);
+      --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      --display: "Fraunces", "Georgia", serif;
+      --sans: "Work Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 15%, rgba(207,74,44,0.12), transparent 40%),
+        radial-gradient(circle at 85% 10%, rgba(31,122,79,0.12), transparent 45%),
+        linear-gradient(180deg, #f8f5ef 0%, #efe9df 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      border-bottom: 2px solid var(--line);
+      padding-bottom: 10px;
+    }
+
+    h1 {
+      font-family: var(--display);
+      font-size: 30px;
+      margin: 0;
+      letter-spacing: 0.4px;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .site-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+    }
+
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: stretch;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      min-height: 0;
+    }
+
+    .column .panel {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 12px 32px rgba(30, 29, 27, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .annotated-frame {
+      width: 100%;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      min-height: var(--annotated-min);
+      flex: 1;
+      background: #fbfaf7;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #f6f1e7;
+    }
+
+    .status.ok { color: var(--ok); border-color: rgba(31,122,79,0.3); }
+    .status.bad { color: var(--bad); border-color: rgba(166,54,42,0.3); }
+
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 13px;
+      background: #fbfaf7;
+      color: var(--ink);
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    .code-editor {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      min-height: var(--editor-min);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfaf7;
+      overflow: hidden;
+    }
+
+    .code-editor pre {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre;
+      overflow: auto;
+    }
+
+    .code-editor textarea {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      border: none;
+      background: transparent;
+      color: transparent;
+      caret-color: var(--ink);
+      resize: none;
+      overflow: auto;
+    }
+
+    .editor {
+      flex: 1;
+      min-height: var(--editor-min);
+    }
+
+    .stdin {
+      min-height: 90px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
+      flex-shrink: 0;
+      margin-top: auto;
+    }
+
+    button {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .output-block {
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfaf7;
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: pre-wrap;
+      min-height: var(--output-min);
+      flex: 1;
+      overflow: auto;
+    }
+
+    .label {
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    @media (max-width: 900px) {
+      .wrap {
+        grid-template-columns: 1fr;
+        flex: 0 0 auto;
+      }
+      .panel {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Ruby.wasm Runner</h1>
+      <p class="sub">Run Ruby in the browser and see STDIN/STDOUT results.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="column">
+      <section class="panel">
+        <div class="panel-head">
+          <div class="label">Editor</div>
+          <span class="status" id="runStatus">Idle</span>
+        </div>
+        <div class="code-editor editor">
+        <pre id="rubyHighlight" class="hljs"></pre>
+        <textarea id="rubyInput" spellcheck="false">def square(n)
+  n * n
+end
+
+def sum_of_squares(limit)
+  total = 0
+  (1..limit).each do |i|
+    total += square(i)
+  end
+  total
+end
+
+def report(limit)
+  puts "Squares:"
+  (1..limit).each do |i|
+    puts "  #{i}^2 = #{square(i)}"
+  end
+  puts "Sum: #{sum_of_squares(limit)}"
+end
+
+report(5)
+        </textarea>
+      </div>
+
+        <div class="controls">
+          <button id="runBtn" type="button" title="Ctrl/Cmd+Enter">Run</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="label">Output</div>
+          <span class="status" id="runtimeStatus">Ready</span>
+        </div>
+        <div id="outputView" class="output-block"></div>
+      </section>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div class="label">Annotated</div>
+      </div>
+      <iframe
+        id="annotatedFrame"
+        class="annotated-frame"
+        title="Lumitrace Annotated Output"
+      ></iframe>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-status">
+      <span id="rubyStatus" class="status">Ruby.wasm loading</span>
+    </div>
+    <div class="footer-links">
+      <span>Copyright (c) 2026 Koichi Sasada</span>
+      <span><a href="https://github.com/ko1/runv">(Repository)</a></span>
+    </div>
+  </footer>
+
+  <script>
+    const rubyStatus = document.getElementById('rubyStatus');
+    if (window.location.protocol === 'file:') {
+      rubyStatus.textContent = 'file:// からの実行は CORS 制限で失敗します。ローカルサーバで開いてください。';
+      rubyStatus.className = 'status bad';
+    }
+    window.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        const runBtn = document.getElementById('runBtn');
+        if (runBtn) runBtn.click();
+      }
+    });
+
+    const rubyInput = document.getElementById('rubyInput');
+    const rubyHighlight = document.getElementById('rubyHighlight');
+    const updateRubyHighlight = () => {
+      if (!rubyInput || !rubyHighlight) return;
+      const code = rubyInput.value || '';
+      if (window.hljs) {
+        rubyHighlight.innerHTML = hljs.highlight(code, { language: 'ruby' }).value;
+      } else {
+        rubyHighlight.textContent = code;
+      }
+    };
+    if (rubyInput && rubyHighlight) {
+      rubyInput.addEventListener('input', updateRubyHighlight);
+      rubyInput.addEventListener('scroll', () => {
+        rubyHighlight.scrollTop = rubyInput.scrollTop;
+        rubyHighlight.scrollLeft = rubyInput.scrollLeft;
+      });
+      updateRubyHighlight();
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@ruby/4.0-wasm-wasi@2.8.1/dist/browser.script.iife.js"></script>
+  <script type="text/ruby">
+    require "js"
+    require "stringio"
+
+    doc = JS.global[:document]
+    ruby_input = doc.call(:getElementById, "rubyInput")
+    run_btn = doc.call(:getElementById, "runBtn")
+    run_status = doc.call(:getElementById, "runStatus")
+    runtime_status = doc.call(:getElementById, "runtimeStatus")
+    ruby_status = doc.call(:getElementById, "rubyStatus")
+    output_view = doc.call(:getElementById, "outputView")
+    annotated_frame = doc.call(:getElementById, "annotatedFrame")
+
+    if ruby_input.nil? || run_btn.nil? || run_status.nil? ||
+       runtime_status.nil? || ruby_status.nil? || output_view.nil? || annotated_frame.nil?
+      JS.global[:console].call(:error, "Ruby UI elements not found")
+      return
+    end
+
+    ruby_status[:textContent] = "Ruby.wasm #{RUBY_VERSION} ready"
+    ruby_status[:className] = "status ok"
+
+    orig_stdout = $stdout
+    orig_stderr = $stderr
+    orig_stdin = $stdin
+
+    lumitrace_code = <<'LUMITRACE'
+require "json"
+require "prism"
+
+module Lumitrace
+module RecordInstrument
+  SKIP_NODE_CLASSES = [
+    Prism::DefNode,
+    Prism::ClassNode,
+    Prism::ModuleNode,
+    Prism::IfNode,
+    Prism::UnlessNode,
+    Prism::WhileNode,
+    Prism::UntilNode,
+    Prism::ForNode,
+    Prism::CaseNode,
+    Prism::BeginNode,
+    Prism::RescueNode,
+    Prism::EnsureNode,
+    Prism::AliasMethodNode,
+    Prism::UndefNode
+  ].freeze
+
+  LITERAL_NODE_CLASSES = [
+    Prism::IntegerNode,
+    Prism::FloatNode,
+    Prism::RationalNode,
+    Prism::ImaginaryNode,
+    Prism::StringNode,
+    Prism::SymbolNode,
+    Prism::TrueNode,
+    Prism::FalseNode,
+    Prism::NilNode
+  ].freeze
+
+  WRAP_NODE_CLASSES = [
+    Prism::CallNode,
+    Prism::LocalVariableReadNode,
+    Prism::ConstantReadNode,
+    Prism::InstanceVariableReadNode,
+    Prism::ClassVariableReadNode,
+    Prism::GlobalVariableReadNode
+  ].freeze
+
+  def self.instrument_source(src, ranges, file_label: nil, record_method: "Lumitrace::RecordInstrument.expr_record")
+    file_label ||= "(unknown)"
+    ranges = normalize_ranges(ranges)
+
+    parse = Prism.parse(src)
+    if parse.errors.any?
+      raise "parse errors: #{parse.errors.map(&:message).join(", ")}"
+    end
+
+    inserts = collect_inserts(parse.value, src, ranges, file_label, record_method)
+
+    apply_insertions(src, inserts)
+  end
+
+  def self.collect_inserts(root, src, ranges, file_label, record_method)
+    inserts = []
+    stack = [[root, nil]]
+
+    until stack.empty?
+      node, parent = stack.pop
+      next unless node
+
+      if node.respond_to?(:location)
+        line = node.location.start_line
+        if in_ranges?(line, ranges) && wrap_expr?(node, parent)
+          loc = expr_location(node)
+          prefix = "#{record_method}('#{file_label}', #{loc[:start_line]}, #{loc[:start_col]}, #{loc[:end_line]}, #{loc[:end_col]}, ("
+          suffix = "))"
+          span_len = loc[:end_offset] - loc[:start_offset]
+          inserts << { pos: loc[:start_offset], text: prefix, kind: :open, len: span_len }
+          inserts << { pos: loc[:end_offset], text: suffix, kind: :close, len: span_len }
+        end
+      end
+
+      node.child_nodes.each { |child| stack << [child, node] }
+    end
+
+    inserts
+  end
+
+  def self.normalize_ranges(ranges)
+    ranges.map do |r|
+      a = r[0].to_i
+      b = r[1].to_i
+      a <= b ? [a, b] : [b, a]
+    end
+  end
+
+  def self.in_ranges?(line, ranges)
+    return true if ranges.empty?
+    ranges.any? { |(s, e)| line >= s && line <= e }
+  end
+
+  def self.apply_insertions(src, inserts)
+    out = src.dup
+    kind_order = { open: 0, close: 1 }
+    inserts.sort_by do |i|
+      [
+        -i[:pos],
+        kind_order[i[:kind]],
+        i[:kind] == :open ? i[:len] : -i[:len]
+      ]
+    end.each do |i|
+      out.insert(i[:pos], i[:text])
+    end
+    out
+  end
+
+  def self.literal_value_node?(node)
+    LITERAL_NODE_CLASSES.include?(node.class)
+  end
+
+  def self.wrap_expr?(node, parent = nil)
+    return false unless node.respond_to?(:location)
+    return false if literal_value_node?(node)
+    return false if node.is_a?(Prism::CallNode) && has_block_with_body?(node)
+    if node.is_a?(Prism::ConstantReadNode) &&
+       (parent.is_a?(Prism::ClassNode) || parent.is_a?(Prism::ModuleNode))
+      return false
+    end
+    WRAP_NODE_CLASSES.include?(node.class)
+  end
+
+  def self.expr_location(node)
+    loc = node.location
+    return {
+      start_offset: loc.start_offset,
+      end_offset: loc.start_offset + loc.length,
+      start_line: loc.start_line,
+      start_col: loc.start_column,
+      end_line: loc.end_line,
+      end_col: loc.end_column
+    } unless node.is_a?(Prism::CallNode)
+
+    best = loc
+    [node.arguments&.location, node.block&.location, node.closing_loc].compact.each do |l|
+      next unless l
+      best = l if (l.start_offset + l.length) >= (best.start_offset + best.length)
+    end
+
+    {
+      start_offset: loc.start_offset,
+      end_offset: best.start_offset + best.length,
+      start_line: loc.start_line,
+      start_col: loc.start_column,
+      end_line: best.end_line,
+      end_col: best.end_column
+    }
+  end
+
+  def self.has_block_with_body?(call_node)
+    block = call_node.child_nodes.find { |n| n.is_a?(Prism::BlockNode) }
+    block && block.body.is_a?(Prism::StatementsNode)
+  end
+
+  @events_by_key = {}
+  @max_values_per_expr = 3
+
+  def self.max_values_per_expr=(n)
+    @max_values_per_expr = n.to_i if n && n.to_i > 0
+  end
+
+  def self.max_values_per_expr
+    @max_values_per_expr
+  end
+
+  def self.reset!
+    @events_by_key = {}
+  end
+
+  def self.expr_record(file, start_line, start_col, end_line, end_col, value)
+    key = [file, start_line, start_col, end_line, end_col]
+    entry = (@events_by_key[key] ||= {
+      file: file,
+      start_line: start_line,
+      start_col: start_col,
+      end_line: end_line,
+      end_col: end_col,
+      values: [],
+      total: 0
+    })
+
+    entry[:total] += 1
+    entry[:values] << safe_value(value)
+    if entry[:values].length > @max_values_per_expr
+      entry[:values].shift(entry[:values].length - @max_values_per_expr)
+    end
+    value
+  end
+
+  def self.events
+    @events_by_key.values.map do |e|
+      {
+        file: e[:file],
+        start_line: e[:start_line],
+        start_col: e[:start_col],
+        end_line: e[:end_line],
+        end_col: e[:end_col],
+        values: e[:values].dup,
+        total: e[:total]
+      }
+    end
+  end
+
+  def self.safe_value(v)
+    case v
+    when String
+      v.bytesize > 1000 ? v[0, 1000] + "..." : v
+    when Numeric, TrueClass, FalseClass, NilClass
+      v
+    else
+      v.inspect
+    end
+  end
+end
+
+module GenerateResultedHtml
+  def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil)
+    events = normalize_events(events)
+    ranges = normalize_ranges(ranges)
+    target_events = events.select { |e| e[:file] == filename }
+
+    html_lines = source.lines.each_with_index.map do |line, idx|
+      lineno = idx + 1
+      next if ranges && !line_in_ranges?(lineno, ranges)
+      line_text = line.chomp
+      evs = aggregate_events_for_line(target_events, lineno, line_text.length)
+      if evs.empty?
+        "<span class=\"line\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
+      else
+        rendered = render_line_with_events(line_text, evs)
+        "<span class=\"line hit\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
+      end
+    end.compact
+
+    <<~HTML
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Recorded Result View</title>
+        <style>
+          body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
+          .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
+          .line { display: inline; padding: 2px 8px; }
+          .line:hover { background: #fff2c6; }
+          .line.hit { background: #f0ffe7; }
+          .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
+          .hint { color: #666; margin-bottom: 8px; }
+          .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
+          .expr { position: relative; display: inline-block; padding-bottom: 1px; }
+          .expr.hit { }
+          .expr.depth-1 { --hl: #7fbf7f; }
+          .expr.depth-2 { --hl: #6fa8ff; }
+          .expr.depth-3 { --hl: #ffb347; }
+          .expr.depth-4 { --hl: #d78bff; }
+          .expr.depth-5 { --hl: #ff6f91; }
+          .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
+          .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+          .marker .tooltip {
+            display: none;
+            position: absolute;
+            left: 0;
+            top: 100%;
+            margin-top: 4px;
+            background: #2b2b2b;
+            color: #fff;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: pre;
+            min-width: 16ch;
+            max-width: 90vw;
+            overflow-x: auto;
+            overflow-y: hidden;
+            z-index: 10;
+            pointer-events: auto;
+          }
+          .marker:hover .tooltip,
+          .marker:focus-within .tooltip,
+          .marker .tooltip:hover { display: block; }
+        </style>
+      </head>
+      <body>
+        <div class="hint">Hover highlighted text to see recorded values.</div>
+        <h2 class="file">#{esc(filename)}</h2>
+        <pre class="code"><code>
+      #{html_lines.join("")}
+        </code></pre>
+      </body>
+      </html>
+    HTML
+  end
+
+  def self.esc(s)
+    s.to_s
+      .gsub("&", "&amp;")
+      .gsub("<", "&lt;")
+      .gsub(">", "&gt;")
+      .gsub('"', "&quot;")
+  end
+
+  def self.format_value(v)
+    case v
+    when NilClass
+      "nil"
+    else
+      v.to_s
+    end
+  end
+
+  def self.render_line_with_events(line_text, events)
+    opens = Hash.new { |h, k| h[k] = [] }
+    closes = Hash.new { |h, k| h[k] = [] }
+
+    events.each do |e|
+      s = e[:start_col].to_i
+      t = e[:end_col].to_i
+      next if t <= s
+
+      values = e[:values]
+      total = e[:total]
+      value_text = summarize_values(values, total)
+      tooltip_html = esc(value_text)
+      depth_class = "depth-#{e[:depth]}"
+      open_tag = "<span class=\"expr hit #{depth_class}\">"
+      close_tag = "<span class=\"marker\" aria-hidden=\"true\">🔎<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
+
+      len = t - s
+      opens[s] << { len: len, start: s, end: t, tag: open_tag }
+      closes[t] << { len: len, start: s, end: t, tag: close_tag }
+    end
+
+    positions = (opens.keys + closes.keys).uniq.sort
+    out = +""
+    cursor = 0
+
+    positions.each do |pos|
+      out << esc(line_text[cursor...pos]) if pos > cursor
+      if closes.key?(pos)
+        closes[pos].sort_by { |c| [-c[:start], c[:len]] }.each { |c| out << c[:tag] }
+      end
+      if opens.key?(pos)
+        opens[pos].sort_by { |o| -o[:end] }.each { |o| out << o[:tag] }
+      end
+      cursor = pos
+    end
+
+    out << esc(line_text[cursor..]) if cursor < line_text.length
+    out
+  end
+
+  def self.summarize_values(values, total = nil)
+    return "" if values.nil? || values.empty?
+    total ||= values.length
+    last_vals = values.last(3)
+    first_index = total - last_vals.length + 1
+    lines = []
+    extra = total - last_vals.length
+    lines << "... (+#{extra} more)" if extra > 0
+    last_vals.each_with_index do |v, i|
+      idx = first_index + i
+      lines << "##{idx}: #{format_value(v)}"
+    end
+    lines.join("\n")
+  end
+
+  def self.aggregate_events_for_line(events, lineno, line_len)
+    buckets = {}
+    spans = []
+
+    events.each do |e|
+      sline = e[:start_line]
+      eline = e[:end_line]
+      next if lineno < sline || lineno > eline
+
+      if sline == eline
+        s = e[:start_col]
+        t = e[:end_col]
+      else
+        if lineno == sline
+          s = e[:start_col]
+          t = line_len
+        elsif lineno == eline
+          s = 0
+          t = e[:end_col]
+        else
+          s = 0
+          t = line_len
+        end
+      end
+
+      next if t <= s
+      spans << { start_col: s, end_col: t }
+      buckets[e[:key]] = {
+        key: e[:key],
+        start_col: s,
+        end_col: t,
+        values: e[:values],
+        total: e[:total]
+      }
+    end
+
+    buckets.values.each do |b|
+      depth = spans.count { |sp| b[:start_col] >= sp[:start_col] && b[:end_col] <= sp[:end_col] }
+      b[:depth] = [[depth, 1].max, 5].min
+    end
+
+    buckets.values.sort_by { |b| b[:start_col] }
+  end
+
+  def self.normalize_events(events)
+    merged = {}
+    events.each do |e|
+      file = e["file"] || e[:file]
+      start_line = e["start_line"] || e[:start_line]
+      start_col = e["start_col"] || e[:start_col]
+      end_line = e["end_line"] || e[:end_line]
+      end_col = e["end_col"] || e[:end_col]
+      key = [
+        file,
+        start_line.to_i,
+        start_col.to_i,
+        end_line.to_i,
+        end_col.to_i
+      ]
+      entry = (merged[key] ||= {
+        key: key,
+        file: key[0],
+        start_line: key[1],
+        start_col: key[2],
+        end_line: key[3],
+        end_col: key[4],
+        values: [],
+        total: 0
+      })
+
+      vals = e["values"] || e[:values] || [e["value"] || e[:value]].compact
+      entry[:values].concat(vals)
+      entry[:total] += (e["total"] || e[:total] || vals.length)
+    end
+    merged.values
+  end
+
+  def self.normalize_ranges(ranges)
+    return nil unless ranges
+    ranges.map do |r|
+      a = (r.respond_to?(:begin) ? r.begin : r[0]).to_i
+      b = (r.respond_to?(:end) ? r.end : r[1]).to_i
+      a <= b ? [a, b] : [b, a]
+    end
+  end
+
+  def self.line_in_ranges?(line, ranges)
+    return true if ranges.empty?
+    ranges.any? { |(s, e)| line >= s && line <= e }
+  end
+end
+end
+LUMITRACE
+
+    ensure_lumitrace = lambda do
+      return if defined?(Lumitrace::RecordInstrument) && defined?(Lumitrace::GenerateResultedHtml)
+      eval(lumitrace_code, TOPLEVEL_BINDING, "lumitrace_inline.rb")
+    end
+
+    set_status = lambda do |node, text, kind = nil|
+      node[:textContent] = text
+      node[:className] = kind ? "status #{kind}" : "status"
+    end
+
+    run_code = lambda do
+      run_btn[:disabled] = true
+      set_status.call(run_status, "Running...")
+      set_status.call(runtime_status, "Executing...")
+      output_view[:textContent] = ""
+
+      out = StringIO.new
+      err = StringIO.new
+      input = StringIO.new("")
+      source = ruby_input[:value].to_s
+      annotated_html = ""
+
+      begin
+        $stdout = out
+        $stderr = err
+        $stdin = input
+
+        Object.send(:remove_const, :STDIN) if Object.const_defined?(:STDIN)
+        Object.send(:remove_const, :STDOUT) if Object.const_defined?(:STDOUT)
+        Object.send(:remove_const, :STDERR) if Object.const_defined?(:STDERR)
+        STDIN = $stdin
+        STDOUT = $stdout
+        STDERR = $stderr
+
+        ensure_lumitrace.call
+        Lumitrace::RecordInstrument.reset!
+        instrumented = Lumitrace::RecordInstrument.instrument_source(source, [], file_label: "script.rb")
+        eval(instrumented, TOPLEVEL_BINDING, "script.rb")
+      rescue Exception => e
+        err.puts("#{e.class}: #{e.message}")
+        if e.backtrace
+          err.puts(e.backtrace.join("\\n"))
+        end
+      ensure
+        combined = out.string
+        combined += err.string if err.string && err.string != ""
+        output_view[:textContent] = combined
+        begin
+          events = Lumitrace::RecordInstrument.events
+          annotated_html = Lumitrace::GenerateResultedHtml.render_source_from_events(
+            source,
+            events,
+            filename: "script.rb"
+          )
+        rescue Exception => e
+          annotated_html = "<pre>Annotated render error: #{e.class}: #{e.message}</pre>"
+        end
+        annotated_frame[:srcdoc] = annotated_html
+
+        $stdout = orig_stdout
+        $stderr = orig_stderr
+        $stdin = orig_stdin
+
+        Object.send(:remove_const, :STDIN) if Object.const_defined?(:STDIN)
+        Object.send(:remove_const, :STDOUT) if Object.const_defined?(:STDOUT)
+        Object.send(:remove_const, :STDERR) if Object.const_defined?(:STDERR)
+        STDIN = orig_stdin
+        STDOUT = orig_stdout
+        STDERR = orig_stderr
+      end
+
+      set_status.call(run_status, "Done", "ok")
+      set_status.call(runtime_status, "Finished", "ok")
+      run_btn[:disabled] = false
+    end
+
+    run_btn.call(:addEventListener, "click") { run_code.call }
+  </script>
+
+  <script>
+    const annotatedFrame = document.getElementById('annotatedFrame');
+    if (annotatedFrame) {
+      annotatedFrame.addEventListener('load', () => {
+        try {
+          const doc = annotatedFrame.contentDocument;
+          if (!doc) return;
+          const clearActive = () => {
+            doc.querySelectorAll('.expr.active').forEach(e => e.classList.remove('active'));
+          };
+          doc.querySelectorAll('.marker').forEach(marker => {
+            marker.addEventListener('mouseenter', () => {
+              clearActive();
+              const expr = marker.closest('.expr');
+              if (expr) expr.classList.add('active');
+            });
+            marker.addEventListener('mouseleave', () => {
+              const expr = marker.closest('.expr');
+              if (expr) expr.classList.remove('active');
+            });
+          });
+        } catch (_) {
+          // Cross-origin or iframe not ready.
+        }
+      });
+    }
+  </script>
+</body>
+</html>
