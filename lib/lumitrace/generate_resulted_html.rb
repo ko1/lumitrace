@@ -119,7 +119,11 @@ module GenerateResultedHtml
       tooltip_html = esc(value_text)
       depth_class = "depth-#{e[:depth]}"
       open_tag = "<span class=\"expr hit #{depth_class}\">"
-      close_tag = "<span class=\"marker\" aria-hidden=\"true\">🔎<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
+      if e.fetch(:marker, true)
+        close_tag = "<span class=\"marker\" aria-hidden=\"true\">🔎<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
+      else
+        close_tag = "</span>"
+      end
 
       len = t - s
       opens[s] << { len: len, start: s, end: t, tag: open_tag }
@@ -172,16 +176,20 @@ module GenerateResultedHtml
       if sline == eline
         s = e[:start_col]
         t = e[:end_col]
+        marker = true
       else
         if lineno == sline
           s = e[:start_col]
           t = line_len
+          marker = false
         elsif lineno == eline
           s = 0
           t = e[:end_col]
+          marker = true
         else
           s = 0
           t = line_len
+          marker = false
         end
       end
 
@@ -191,6 +199,7 @@ module GenerateResultedHtml
         key: e[:key],
         start_col: s,
         end_col: t,
+        marker: marker,
         values: e[:values],
         total: e[:total]
       }

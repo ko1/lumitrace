@@ -35,6 +35,7 @@ module RecordInstrument
   WRAP_NODE_CLASSES = [
     Prism::CallNode,
     Prism::LocalVariableReadNode,
+    Prism::ItLocalVariableReadNode,
     Prism::ConstantReadNode,
     Prism::InstanceVariableReadNode,
     Prism::ClassVariableReadNode,
@@ -116,7 +117,18 @@ module RecordInstrument
   def self.wrap_expr?(node, parent = nil)
     return false unless node.respond_to?(:location)
     return false if literal_value_node?(node)
-    return false if node.is_a?(Prism::CallNode) && has_block_with_body?(node)
+    if parent.is_a?(Prism::AliasGlobalVariableNode) || parent.is_a?(Prism::AliasMethodNode)
+      return false
+    end
+    if parent.is_a?(Prism::DefNode) && parent.receiver == node
+      return false
+    end
+    if parent.is_a?(Prism::EmbeddedVariableNode)
+      return false
+    end
+    if parent.is_a?(Prism::ImplicitNode)
+      return false
+    end
     if node.is_a?(Prism::ConstantReadNode) &&
        (parent.is_a?(Prism::ClassNode) || parent.is_a?(Prism::ModuleNode))
       return false

@@ -3,6 +3,7 @@
 require "minitest/autorun"
 require "json"
 require "tmpdir"
+require "rbconfig"
 require_relative "../lib/lumitrace"
 
 class LumiTraceTest < Minitest::Test
@@ -85,5 +86,37 @@ class LumiTraceTest < Minitest::Test
     end
   ensure
     ENV.delete("LUMITRACE_ROOT")
+  end
+
+  def test_instrument_stdlib_compiles
+    skip "RubyVM::InstructionSequence unavailable" unless defined?(RubyVM::InstructionSequence)
+
+    rubylibdir = RbConfig::CONFIG["rubylibdir"]
+    rubyarchdir = RbConfig::CONFIG["rubyarchdir"]
+    dirs = [rubylibdir, rubyarchdir].compact.uniq
+    files = dirs.flat_map { |d| Dir.glob(File.join(d, "**", "*.rb")) }
+    files = files.reject { |f| f.include?("/site_ruby/") || f.include?("/vendor_ruby/") }
+    files = files.uniq.sort
+
+    assert files.any?, "no stdlib .rb files found under #{dirs.join(", ")}"
+
+    files.each do |path|
+      src = File.read(path)
+      begin
+        modified = Lumitrace::RecordInstrument.instrument_source(src, [], file_label: path)
+      rescue StandardError => e
+        flunk "instrument failed for #{path}: #{e.class}: #{e.message}"
+      end
+
+      assert modified.is_a?(String), "instrument did not return string for #{path}"
+
+      begin
+        RubyVM::InstructionSequence.compile(modified, path)
+      rescue SyntaxError => e
+        flunk "compile failed for #{path}: #{e.message}"
+      end
+
+      assert true, "compile succeeded for #{path}"
+    end
   end
 end
