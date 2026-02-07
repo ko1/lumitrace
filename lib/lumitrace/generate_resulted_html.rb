@@ -610,7 +610,8 @@ module GenerateResultedHtml
       render_text_from_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel)
     end.compact
 
-    sections.join("\n")
+    header = "=== Lumitrace Results (text) ===\n\n"
+    header + sections.join("\n")
   end
 
   def self.format_ranges(ranges)
