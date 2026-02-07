@@ -1,0 +1,62 @@
+=== Lumitrace Results (text) ===
+
+### sample/sample.rb
+ 1| require './sample/sample2' #=> true
+ 2| require './sample/sample3' #=> true
+ 3| 
+ 4| def score(n)
+ 5|   base = n + 1                 #=> 3 (3rd run)
+ 6|   scaled = Sample2.scale(base) #=> 6 (3rd run)
+ 7|   squares = Sample3.series(n)  #=> [1, 4] (3rd run)
+ 8|   squares.sum + scaled         #=> 11 (3rd run)
+ 9| end
+10| 
+11| labels = []
+12| totals = []
+13| 
+14| 3.times do
+15|   n = it                                   #=> 2 (3rd run)
+16|   total = score(n)                         #=> 11 (3rd run)
+17|   labels << Sample2.format("n#{n}", total) #=> ["n0=2", "n1=5", "n2=11"] (3rd run)
+18|   totals << total                          #=> [2, 5, 11] (3rd run)
+19| end                                        #=> 3
+20| 
+21| flags = totals.map { |v| v > 5 } #=> [false, false, true]
+22| stats = {
+23|   count: totals.length,          #=> 3
+24|   max: totals.max,               #=> 11
+25|   min: totals.min                #=> 2
+26| }
+27| 
+28| buckets = Sample3.bucketize(totals)                    #=> {even: [2], odd: [5, 11]}
+29| summary = "#{stats[:count]} items, max=#{stats[:max]}" #=> 3
+30| 
+31| puts labels.join(", ") #=> nil
+32| p flags                #=> [false, false, true]
+33| p stats                #=> {count: 3, max: 11, min: 2}
+34| p buckets              #=> {even: [2], odd: [5, 11]}
+35| p summary              #=> 3 items, max=11
+
+### sample/sample2.rb
+ 1| module Sample2
+ 2|   FACTOR = 2
+ 3| 
+ 4|   def self.format(label, value)
+ 5|     "#{label}=#{value}"         #=> 11 (3rd run)
+ 6|   end
+ 7| 
+ 8|   def self.scale(value)
+ 9|     value * FACTOR      #=> 6 (3rd run)
+10|   end
+11| end
+
+### sample/sample3.rb
+1| module Sample3
+2|   def self.bucketize(values)
+3|     values.group_by { |v| v % 2 == 0 ? :even : :odd } #=> {even: [2], odd: [5, 11]}
+4|   end
+5| 
+6|   def self.series(n)
+7|     (1..n).map { |i| i * i } #=> [1, 4] (3rd run)
+8|   end
+9| end

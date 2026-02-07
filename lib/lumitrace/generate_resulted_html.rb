@@ -334,7 +334,12 @@ module GenerateResultedHtml
     sections = target_paths.sort.map do |path|
       next unless File.exist?(path)
       src = File.read(path)
-      ranges = ranges_by_file ? (ranges_by_file[path] || []) : nil
+      if ranges_by_file
+        next unless ranges_by_file.key?(path)
+        ranges = ranges_by_file[path] || []
+      else
+        ranges = nil
+      end
       html_lines = src.lines.each_with_index.map do |line, idx|
         lineno = idx + 1
         next if ranges && !line_in_ranges?(lineno, ranges)
@@ -605,7 +610,12 @@ module GenerateResultedHtml
     sections = by_file.keys.sort.map do |path|
       next unless File.exist?(path)
       src = File.read(path)
-      ranges = ranges_by_file ? (ranges_by_file[path] || []) : nil
+      if ranges_by_file
+        next unless ranges_by_file.key?(path)
+        ranges = ranges_by_file[path] || []
+      else
+        ranges = nil
+      end
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
       render_text_from_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel)
     end.compact

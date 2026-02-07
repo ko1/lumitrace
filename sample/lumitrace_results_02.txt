@@ -1,0 +1,24 @@
+=== Lumitrace Results (text) ===
+
+### sample/sample.rb (lines: 4-18, 28-32)
+ 4| def score(n)
+ 5|   base = n + 1                 #=> 3 (3rd run)
+ 6|   scaled = Sample2.scale(base) #=> 6 (3rd run)
+ 7|   squares = Sample3.series(n)  #=> [1, 4] (3rd run)
+ 8|   squares.sum + scaled         #=> 11 (3rd run)
+ 9| end
+10| 
+11| labels = []
+12| totals = []
+13| 
+14| 3.times do
+15|   n = it                                   #=> 2 (3rd run)
+16|   total = score(n)                         #=> 11 (3rd run)
+17|   labels << Sample2.format("n#{n}", total) #=> ["n0=2", "n1=5", "n2=11"] (3rd run)
+18|   totals << total                          #=> [2, 5, 11] (3rd run)
+...
+28| buckets = Sample3.bucketize(totals)                    #=> {even: [2], odd: [5, 11]}
+29| summary = "#{stats[:count]} items, max=#{stats[:max]}" #=> 3
+30| 
+31| puts labels.join(", ") #=> nil
+32| p flags                #=> [false, false, true]

@@ -82,8 +82,14 @@ module Lumitrace
               root: @atexit_output_root,
               ranges_by_file: @atexit_ranges_by_file
             )
-            puts text
-            verbose_log("text: printed #{text.lines.count} lines")
+            if @atexit_text == true
+              puts text
+              verbose_log("text: printed #{text.lines.count} lines")
+            else
+              text_path = File.expand_path(@atexit_text, @atexit_output_root)
+              File.write(text_path, text)
+              verbose_log("text: #{text_path}")
+            end
           end
           if @atexit_html
             html = GenerateResultedHtml.render_all_from_events(

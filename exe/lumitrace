@@ -10,6 +10,7 @@ json_out = nil
 root = nil
 emit_html = false
 text_requested = false
+text_out = nil
 git_diff_mode = nil
 git_diff_context = nil
 git_cmd = nil
@@ -25,8 +26,9 @@ parser = OptionParser.new do |opts|
   opts.on("--root PATH", "Root directory for instrumentation/output headings") do |v|
     root = v
   end
-  opts.on("--text", "Write text output to stdout") do
+  opts.on("--text [PATH]", "Write text output to stdout (or PATH)") do |v|
     text_requested = true
+    text_out = v if v && !v.empty?
   end
   opts.on("--html [PATH]", "Write HTML output (default: lumitrace_recorded.html)") do |v|
     emit_html = true
@@ -121,7 +123,7 @@ Lumitrace.enable!(
   max_values: max_values,
   ranges_by_file: ranges_by_file,
   root: root,
-  text: text_requested ? true : nil,
+  text: text_requested ? (text_out || true) : nil,
   html: emit_html ? (html_out || true) : nil,
   json: json_out ? (json_out.empty? ? true : json_out) : nil,
   verbose: verbose,

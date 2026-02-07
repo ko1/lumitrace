@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Recorded Result View</title>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
+    .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
+    .line { display: inline; padding: 2px 8px; }
+    .line:hover { background: #fff2c6; }
+    .line.hit { background: #f0ffe7; }
+    .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
+    .hint { color: #666; margin-bottom: 8px; }
+    .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
+    .expr { position: relative; display: inline-block; padding-bottom: 1px; }
+    .expr.hit { }
+    .expr.depth-1 { --hl: #7fbf7f; }
+    .expr.depth-2 { --hl: #6fa8ff; }
+    .expr.depth-3 { --hl: #ffb347; }
+    .expr.depth-4 { --hl: #d78bff; }
+    .expr.depth-5 { --hl: #ff6f91; }
+    .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
+    .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+    .marker .tooltip {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: #2b2b2b;
+      color: #fff;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: pre;
+      min-width: 16ch;
+      max-width: 90vw;
+      overflow-x: auto;
+      overflow-y: hidden;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .marker:hover .tooltip,
+    .marker:focus-within .tooltip,
+    .marker .tooltip:hover { display: block; }
+  </style>
+</head>
+<body>
+  <div class="hint">Hover highlighted text to see recorded values.</div>
+    <h2 class="file">sample/sample.rb</h2>
+  <pre class="code"><code>
+<span class="line hit" data-line="1"><span class="ln">1</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:1:0:1:26">require './sample/sample2'<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:1:0:1:26" aria-hidden="true">🔎<span class="tooltip">#1: true</span></span></span></span>
+<span class="line hit" data-line="2"><span class="ln">2</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:2:0:2:26">require './sample/sample3'<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:2:0:2:26" aria-hidden="true">🔎<span class="tooltip">#1: true</span></span></span></span>
+<span class="line" data-line="3"><span class="ln">3</span> </span>
+<span class="line" data-line="4"><span class="ln">4</span> def score(n)</span>
+<span class="line hit" data-line="5"><span class="ln">5</span>   base = <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:5:9:5:14"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:5:9:5:10">n<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:5:9:5:10" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span> + 1<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:5:9:5:14" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 3</span></span></span></span>
+<span class="line hit" data-line="6"><span class="ln">6</span>   scaled = <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:6:11:6:30"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:6:11:6:18">Sample2<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:6:11:6:18" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: Sample2</span></span></span>.scale(<span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:6:25:6:29">base<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:6:25:6:29" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 3</span></span></span>)<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:6:11:6:30" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 6</span></span></span></span>
+<span class="line hit" data-line="7"><span class="ln">7</span>   squares = <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:7:12:7:29"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:7:12:7:19">Sample3<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:7:12:7:19" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: Sample3</span></span></span>.series(<span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:7:27:7:28">n<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:7:27:7:28" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span>)<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:7:12:7:29" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: [1, 4]</span></span></span></span>
+<span class="line hit" data-line="8"><span class="ln">8</span>   <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:2:8:22"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:2:8:13"><span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:2:8:9">squares<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:2:8:9" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: [1, 4]</span></span></span>.sum<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:2:8:13" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 5</span></span></span> + <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:16:8:22">scaled<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:16:8:22" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 6</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:8:2:8:22" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 11</span></span></span></span>
+<span class="line" data-line="9"><span class="ln">9</span> end</span>
+<span class="line" data-line="10"><span class="ln">10</span> </span>
+<span class="line" data-line="11"><span class="ln">11</span> labels = []</span>
+<span class="line" data-line="12"><span class="ln">12</span> totals = []</span>
+<span class="line" data-line="13"><span class="ln">13</span> </span>
+<span class="line hit" data-line="14"><span class="ln">14</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:14:0:19:3">3.times do</span></span>
+<span class="line hit" data-line="15"><span class="ln">15</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:14:0:19:3">  n = <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:15:6:15:8">it<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:15:6:15:8" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span></span></span>
+<span class="line hit" data-line="16"><span class="ln">16</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:14:0:19:3">  total = <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:16:10:16:18">score(<span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:16:16:16:17">n<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:16:16:16:17" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span>)<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:16:10:16:18" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 11</span></span></span></span></span>
+<span class="line hit" data-line="17"><span class="ln">17</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:14:0:19:3">  <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:2:17:42"><span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:2:17:8">labels<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:2:17:8" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: [&quot;n0=2&quot;, &quot;n1=5&quot;]</span></span></span> &lt;&lt; <span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:12:17:42"><span class="expr hit depth-4" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:12:17:19">Sample2<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:12:17:19" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: Sample2</span></span></span>.format(&quot;n#{<span class="expr hit depth-4" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:31:17:32">n<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:31:17:32" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span>}&quot;, <span class="expr hit depth-4" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:36:17:41">total<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:36:17:41" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 11</span></span></span>)<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:12:17:42" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: n2=11</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:17:2:17:42" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: [&quot;n0=2&quot;, &quot;n1=5&quot;, &quot;n2=11&quot;]</span></span></span></span></span>
+<span class="line hit" data-line="18"><span class="ln">18</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:14:0:19:3">  <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:18:2:18:17"><span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:18:2:18:8">totals<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:18:2:18:8" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: [2, 5]</span></span></span> &lt;&lt; <span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:18:12:18:17">total<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:18:12:18:17" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 11</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:18:2:18:17" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: [2, 5, 11]</span></span></span></span></span>
+<span class="line hit" data-line="19"><span class="ln">19</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:14:0:19:3">end<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:14:0:19:3" aria-hidden="true">🔎<span class="tooltip">#1: 3</span></span></span></span>
+<span class="line" data-line="20"><span class="ln">20</span> </span>
+<span class="line hit" data-line="21"><span class="ln">21</span> flags = <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:8:21:32"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:8:21:14">totals<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:8:21:14" aria-hidden="true">🔎<span class="tooltip">#1: [2, 5, 11]</span></span></span>.map { |v| <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:25:21:30"><span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:25:21:26">v<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:25:21:26" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 11</span></span></span> &gt; 5<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:25:21:30" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: true</span></span></span> }<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:21:8:21:32" aria-hidden="true">🔎<span class="tooltip">#1: [false, false, true]</span></span></span></span>
+<span class="line" data-line="22"><span class="ln">22</span> stats = {</span>
+<span class="line hit" data-line="23"><span class="ln">23</span>   count: <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:23:9:23:22"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:23:9:23:15">totals<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:23:9:23:15" aria-hidden="true">🔎<span class="tooltip">#1: [2, 5, 11]</span></span></span>.length<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:23:9:23:22" aria-hidden="true">🔎<span class="tooltip">#1: 3</span></span></span>,</span>
+<span class="line hit" data-line="24"><span class="ln">24</span>   max: <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:24:7:24:17"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:24:7:24:13">totals<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:24:7:24:13" aria-hidden="true">🔎<span class="tooltip">#1: [2, 5, 11]</span></span></span>.max<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:24:7:24:17" aria-hidden="true">🔎<span class="tooltip">#1: 11</span></span></span>,</span>
+<span class="line hit" data-line="25"><span class="ln">25</span>   min: <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:25:7:25:17"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:25:7:25:13">totals<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:25:7:25:13" aria-hidden="true">🔎<span class="tooltip">#1: [2, 5, 11]</span></span></span>.min<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:25:7:25:17" aria-hidden="true">🔎<span class="tooltip">#1: 2</span></span></span></span>
+<span class="line" data-line="26"><span class="ln">26</span> }</span>
+<span class="line" data-line="27"><span class="ln">27</span> </span>
+<span class="line hit" data-line="28"><span class="ln">28</span> buckets = <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:28:10:28:35"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:28:10:28:17">Sample3<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:28:10:28:17" aria-hidden="true">🔎<span class="tooltip">#1: Sample3</span></span></span>.bucketize(<span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:28:28:28:34">totals<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:28:28:28:34" aria-hidden="true">🔎<span class="tooltip">#1: [2, 5, 11]</span></span></span>)<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:28:10:28:35" aria-hidden="true">🔎<span class="tooltip">#1: {even: [2], odd: [5, 11]}</span></span></span></span>
+<span class="line hit" data-line="29"><span class="ln">29</span> summary = &quot;#{<span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:13:29:26"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:13:29:18">stats<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:13:29:18" aria-hidden="true">🔎<span class="tooltip">#1: {count: 3, max: 11, min: 2}</span></span></span>[:count]<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:13:29:26" aria-hidden="true">🔎<span class="tooltip">#1: 3</span></span></span>} items, max=#{<span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:41:29:52"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:41:29:46">stats<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:41:29:46" aria-hidden="true">🔎<span class="tooltip">#1: {count: 3, max: 11, min: 2}</span></span></span>[:max]<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:29:41:29:52" aria-hidden="true">🔎<span class="tooltip">#1: 11</span></span></span>}&quot;</span>
+<span class="line" data-line="30"><span class="ln">30</span> </span>
+<span class="line hit" data-line="31"><span class="ln">31</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:31:0:31:22">puts <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:31:5:31:22"><span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:31:5:31:11">labels<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:31:5:31:11" aria-hidden="true">🔎<span class="tooltip">#1: [&quot;n0=2&quot;, &quot;n1=5&quot;, &quot;n2=11&quot;]</span></span></span>.join(&quot;, &quot;)<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:31:5:31:22" aria-hidden="true">🔎<span class="tooltip">#1: n0=2, n1=5, n2=11</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:31:0:31:22" aria-hidden="true">🔎<span class="tooltip">#1: nil</span></span></span></span>
+<span class="line hit" data-line="32"><span class="ln">32</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:32:0:32:7">p <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:32:2:32:7">flags<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:32:2:32:7" aria-hidden="true">🔎<span class="tooltip">#1: [false, false, true]</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:32:0:32:7" aria-hidden="true">🔎<span class="tooltip">#1: [false, false, true]</span></span></span></span>
+<span class="line hit" data-line="33"><span class="ln">33</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:33:0:33:7">p <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:33:2:33:7">stats<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:33:2:33:7" aria-hidden="true">🔎<span class="tooltip">#1: {count: 3, max: 11, min: 2}</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:33:0:33:7" aria-hidden="true">🔎<span class="tooltip">#1: {count: 3, max: 11, min: 2}</span></span></span></span>
+<span class="line hit" data-line="34"><span class="ln">34</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:34:0:34:9">p <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:34:2:34:9">buckets<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:34:2:34:9" aria-hidden="true">🔎<span class="tooltip">#1: {even: [2], odd: [5, 11]}</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:34:0:34:9" aria-hidden="true">🔎<span class="tooltip">#1: {even: [2], odd: [5, 11]}</span></span></span></span>
+<span class="line hit" data-line="35"><span class="ln">35</span> <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:35:0:35:9">p <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:35:2:35:9">summary<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:35:2:35:9" aria-hidden="true">🔎<span class="tooltip">#1: 3 items, max=11</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample.rb:35:0:35:9" aria-hidden="true">🔎<span class="tooltip">#1: 3 items, max=11</span></span></span></span>
+
+  </code></pre>
+
+  <h2 class="file">sample/sample2.rb</h2>
+  <pre class="code"><code>
+<span class="line" data-line="1"><span class="ln">1</span> module Sample2</span>
+<span class="line" data-line="2"><span class="ln">2</span>   FACTOR = 2</span>
+<span class="line" data-line="3"><span class="ln">3</span> </span>
+<span class="line" data-line="4"><span class="ln">4</span>   def self.format(label, value)</span>
+<span class="line hit" data-line="5"><span class="ln">5</span>     &quot;#{<span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:5:7:5:12">label<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:5:7:5:12" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: n2</span></span></span>}=#{<span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:5:16:5:21">value<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:5:16:5:21" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 11</span></span></span>}&quot;</span>
+<span class="line" data-line="6"><span class="ln">6</span>   end</span>
+<span class="line" data-line="7"><span class="ln">7</span> </span>
+<span class="line" data-line="8"><span class="ln">8</span>   def self.scale(value)</span>
+<span class="line hit" data-line="9"><span class="ln">9</span>     <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:9:4:9:18"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:9:4:9:9">value<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:9:4:9:9" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 3</span></span></span> * <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:9:12:9:18">FACTOR<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:9:12:9:18" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample2.rb:9:4:9:18" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 6</span></span></span></span>
+<span class="line" data-line="10"><span class="ln">10</span>   end</span>
+<span class="line" data-line="11"><span class="ln">11</span> end</span>
+
+  </code></pre>
+
+  <h2 class="file">sample/sample3.rb</h2>
+  <pre class="code"><code>
+<span class="line" data-line="1"><span class="ln">1</span> module Sample3</span>
+<span class="line" data-line="2"><span class="ln">2</span>   def self.bucketize(values)</span>
+<span class="line hit" data-line="3"><span class="ln">3</span>     <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:4:3:53"><span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:4:3:10">values<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:4:3:10" aria-hidden="true">🔎<span class="tooltip">#1: [2, 5, 11]</span></span></span>.group_by { |v| <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:26:3:36"><span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:26:3:31"><span class="expr hit depth-4" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:26:3:27">v<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:26:3:27" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 11</span></span></span> % 2<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:26:3:31" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 1</span></span></span> == 0<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:26:3:36" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: false</span></span></span> ? :even : :odd }<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:3:4:3:53" aria-hidden="true">🔎<span class="tooltip">#1: {even: [2], odd: [5, 11]}</span></span></span></span>
+<span class="line" data-line="4"><span class="ln">4</span>   end</span>
+<span class="line" data-line="5"><span class="ln">5</span> </span>
+<span class="line" data-line="6"><span class="ln">6</span>   def self.series(n)</span>
+<span class="line hit" data-line="7"><span class="ln">7</span>     <span class="expr hit depth-1" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:4:7:28">(1..<span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:8:7:9">n<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:8:7:9" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span>).map { |i| <span class="expr hit depth-2" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:21:7:26"><span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:21:7:22">i<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:21:7:22" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span> * <span class="expr hit depth-3" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:25:7:26">i<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:25:7:26" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 2</span></span></span><span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:21:7:26" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: 4</span></span></span> }<span class="marker" data-key="/home/ko1/ruby/app/lumitrace/sample/sample3.rb:7:4:7:28" aria-hidden="true">🔎<span class="tooltip">... (+2 more)
+#3: [1, 4]</span></span></span></span>
+<span class="line" data-line="8"><span class="ln">8</span>   end</span>
+<span class="line" data-line="9"><span class="ln">9</span> end</span>
+
+  </code></pre>
+
+  <script>
+    (function() {
+      document.querySelectorAll('.marker').forEach(marker => {
+        marker.addEventListener('mouseenter', () => {
+          document.querySelectorAll('.expr').forEach(e => e.classList.remove('active'));
+          const key = marker.dataset.key;
+          if (key) {
+            document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.add('active'));
+          } else {
+            marker.closest('.expr')?.classList.add('active');
+          }
+        });
+        marker.addEventListener('mouseleave', () => {
+          const key = marker.dataset.key;
+          if (key) {
+            document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.remove('active'));
+          } else {
+            marker.closest('.expr')?.classList.remove('active');
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
