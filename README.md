@@ -2,6 +2,16 @@
 
 Lumitrace instruments Ruby source code at load time, records expression results, and renders an HTML view that overlays recorded values on your code. It is designed for quick, local “what happened here?” inspection during test runs or scripts.
 
+## Useful links
+
+- [runv/](runv/): Lumitrace demonstration Ruby playground with inlined tracing
+- [Tutorial](doc/tutorial.md)
+- [Tutorial in Japanese](doc/tutorial.ja.md)
+- [doc/spec.md](doc/spec.md)
+- [doc/supported_syntax.md](doc/supported_syntax.md)
+- [GitHub repository](https://github.com/ko1/lumitrace)
+
+
 ## How It Works
 
 Lumitrace hooks `RubyVM::InstructionSequence.translate` (when available) to rewrite files at require-time. It records expression results and renders an HTML view that shows them inline. Only the last N values per expression are kept to avoid huge output.
