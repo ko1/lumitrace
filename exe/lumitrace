@@ -7,25 +7,30 @@ html_out = nil
 max_values = nil
 range_specs = []
 json_out = nil
-root = ENV["LUMITRACE_ROOT"]
-emit_text = true
+root = nil
 emit_html = false
-html_requested = false
+text_requested = false
+git_diff_mode = nil
+git_diff_context = nil
+git_cmd = nil
+git_diff_no_untracked = false
+verbose_cli = false
 
-emit_html = true
+require_relative "../lib/lumitrace"
+
+verbose = false
 
 parser = OptionParser.new do |opts|
   opts.banner = "usage: lumitrace FILE [options]"
   opts.on("--root PATH", "Root directory for instrumentation/output headings") do |v|
     root = v
   end
+  opts.on("--text", "Write text output to stdout") do
+    text_requested = true
+  end
   opts.on("--html [PATH]", "Write HTML output (default: lumitrace_recorded.html)") do |v|
     emit_html = true
-    html_requested = true
     html_out = v if v && !v.empty?
-  end
-  opts.on("--text", "Write text output to stdout") do
-    emit_text = true
   end
   opts.on("--json [PATH]", "Write JSON output (default: lumitrace_recorded.json)") do |v|
     json_out = v || ""
@@ -36,6 +41,21 @@ parser = OptionParser.new do |opts|
   opts.on("--range SPEC", "Restrict instrumentation per file: FILE:1-5,10-12") do |v|
     range_specs << v
   end
+  opts.on("--git-diff [MODE]", "Restrict to git diff: working|staged|base:REV|range:SPEC") do |v|
+    git_diff_mode = v || "working"
+  end
+  opts.on("--git-diff-context N", Integer, "Expand diff hunks by +/-N lines") do |v|
+    git_diff_context = v
+  end
+  opts.on("--git-cmd PATH", "Git executable for diff") do |v|
+    git_cmd = v
+  end
+  opts.on("--git-diff-no-untracked", "Exclude untracked files from git diff ranges") do
+    git_diff_no_untracked = true
+  end
+  opts.on("--verbose", "Print verbose logs to stderr") do
+    verbose_cli = true
+  end
   opts.on("-h", "--help", "Show help") do
     puts opts
     exit 0
@@ -45,11 +65,9 @@ end
 args = parser.parse(ARGV)
 path = args.shift or abort(parser.to_s)
 
-require_relative "../lib/lumitrace"
+verbose = true if verbose_cli
 
-env_max = ENV["LUMITRACE_VALUES_MAX"]
-max_values = env_max if max_values.nil? && env_max && !env_max.empty?
-max_values = 1 if max_values.nil? && emit_text
+
 
 ranges_by_file = nil
 if range_specs.any?
@@ -77,36 +95,36 @@ if range_specs.any?
   end
 end
 
+
+if git_diff_mode || git_diff_context || git_cmd || git_diff_no_untracked
+  require_relative "../lib/lumitrace/git_diff"
+  diff_ranges = Lumitrace::GitDiff.ranges(
+    mode: git_diff_mode,
+    context: git_diff_context,
+    git_cmd: git_cmd,
+    include_untracked: !git_diff_no_untracked
+  )
+  if diff_ranges
+    if ranges_by_file
+      diff_ranges.each do |file, ranges|
+        ranges_by_file[file].concat(ranges)
+      end
+    else
+      ranges_by_file = diff_ranges
+    end
+  end
+end
+
+
 root = File.expand_path(root) if root && !root.strip.empty?
-Lumitrace.enable!(max_values: max_values, ranges_by_file: ranges_by_file, root: root, at_exit: false)
+Lumitrace.enable!(
+  max_values: max_values,
+  ranges_by_file: ranges_by_file,
+  root: root,
+  text: text_requested ? true : nil,
+  html: emit_html ? (html_out || true) : nil,
+  json: json_out ? (json_out.empty? ? true : json_out) : nil,
+  verbose: verbose,
+  at_exit: true
+)
 load File.expand_path(path)
-events = Lumitrace::RecordInstrument.events
-
-if json_out
-  json_path = json_out.empty? ? "lumitrace_recorded.json" : json_out
-  events_path = File.expand_path(json_path, Dir.pwd)
-  Lumitrace::RecordInstrument.dump_json(events_path)
-  puts "recorded: #{events_path}"
-end
-
-emit_html = false if emit_text && !html_requested
-
-if emit_text
-  text = Lumitrace::GenerateResultedHtml.render_text_all_from_events(
-    events,
-    root: root || File.dirname(File.expand_path(path)),
-    ranges_by_file: ranges_by_file
-  )
-  puts text
-end
-
-if emit_html
-  html = Lumitrace::GenerateResultedHtml.render_all_from_events(
-    events,
-    root: root || File.dirname(File.expand_path(path)),
-    ranges_by_file: ranges_by_file
-  )
-  out_path = html_out || File.join(File.dirname(File.expand_path(path)), "lumitrace_recorded.html")
-  File.write(out_path, html)
-  puts "html: #{out_path}"
-end
