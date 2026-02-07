@@ -4,11 +4,11 @@ Lumitrace instruments Ruby source code at load time, records expression results,
 
 ## Useful links
 
-- [runv/](runv/): Lumitrace demonstration Ruby playground with inlined tracing
-- [Tutorial](doc/tutorial.md)
-- [Tutorial in Japanese](doc/tutorial.ja.md)
-- [doc/spec.md](doc/spec.md)
-- [doc/supported_syntax.md](doc/supported_syntax.md)
+- [runv/](https://ko1.github.io/lumitrace/runv/): Lumitrace demonstration Ruby playground with inlined tracing
+- [Tutorial](https://ko1.github.io/lumitrace/docs/tutorial.html)
+- [Tutorial in Japanese](https://ko1.github.io/lumitrace/docs/tutorial.ja.html)
+- [Spec](https://ko1.github.io/lumitrace/docs/spec.html)
+- [Supported Syntax](https://ko1.github.io/lumitrace/docs/supported_syntax.html)
 - [GitHub repository](https://github.com/ko1/lumitrace)
 
 

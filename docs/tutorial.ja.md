@@ -107,6 +107,9 @@ Lumitrace のテキストは `sample/lumitrace_results_01.txt`、HTML は `sampl
 
 `--html PATH` を省略した場合の HTML 出力は `lumitrace_recorded.html` です。
 
+HTML 出力を見る:
+- [lumitrace_results_01.html](https://ko1.github.io/lumitrace/sample/lumitrace_results_01.html)
+
 ### 範囲指定の例
 
 範囲を指定して、別の出力として保存します:
@@ -121,6 +124,9 @@ ruby exe/lumitrace sample/sample.rb \
 出力例（`sample/lumitrace_results_02.txt`）:
 
 ```
+
+HTML 出力を見る:
+- [lumitrace_results_02.html](https://ko1.github.io/lumitrace/sample/lumitrace_results_02.html)
 === Lumitrace Results (text) ===
 
 ### sample/sample.rb (lines: 4-18, 28-32)

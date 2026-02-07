@@ -107,6 +107,9 @@ The Lumitrace text output is saved in `sample/lumitrace_results_01.txt`, and the
 
 If you run without `--html PATH`, the HTML output defaults to `lumitrace_recorded.html`.
 
+View the HTML output:
+- [lumitrace_results_01.html](https://ko1.github.io/lumitrace/sample/lumitrace_results_01.html)
+
 ### Range example
 
 Run with ranges and save separate outputs:
@@ -121,6 +124,9 @@ ruby exe/lumitrace sample/sample.rb \
 Example output (`sample/lumitrace_results_02.txt`):
 
 ```
+
+View the HTML output:
+- [lumitrace_results_02.html](https://ko1.github.io/lumitrace/sample/lumitrace_results_02.html)
 === Lumitrace Results (text) ===
 
 ### sample/sample.rb (lines: 4-18, 28-32)
