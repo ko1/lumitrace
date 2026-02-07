@@ -13,7 +13,6 @@ module Lumitrace
     json_env = parse_env_flag(ENV["LUMITRACE_JSON"])
     raw_text = ENV["LUMITRACE_TEXT"]
     text_env = parse_env_flag(raw_text)
-    disable_env = parse_env_flag(ENV["LUMITRACE_DISABLE"])
     max_env = ENV["LUMITRACE_VALUES_MAX"]
     root_env = ENV["LUMITRACE_ROOT"]
 
@@ -36,7 +35,6 @@ module Lumitrace
       html: html,
       html_out: html_out,
       json: json,
-      disabled: disable_env == true,
       max_values: max_env,
       root: root_env,
       verbose: verbose

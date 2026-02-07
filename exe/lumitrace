@@ -1,132 +1,36 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "json"
-require "optparse"
-html_out = nil
-max_values = nil
-range_specs = []
-json_out = nil
-root = nil
-emit_html = false
-text_requested = false
-text_out = nil
-git_diff_mode = nil
-git_diff_context = nil
-git_cmd = nil
-git_diff_no_untracked = false
-verbose_cli = false
-
 require_relative "../lib/lumitrace"
 
-verbose = false
-
-parser = OptionParser.new do |opts|
-  opts.banner = "usage: lumitrace FILE [options]"
-  opts.on("--root PATH", "Root directory for instrumentation/output headings") do |v|
-    root = v
-  end
-  opts.on("--text [PATH]", "Write text output to stdout (or PATH)") do |v|
-    text_requested = true
-    text_out = v if v && !v.empty?
-  end
-  opts.on("--html [PATH]", "Write HTML output (default: lumitrace_recorded.html)") do |v|
-    emit_html = true
-    html_out = v if v && !v.empty?
-  end
-  opts.on("--json [PATH]", "Write JSON output (default: lumitrace_recorded.json)") do |v|
-    json_out = v || ""
-  end
-  opts.on("--max N", Integer, "Max values per expression") do |v|
-    max_values = v
-  end
-  opts.on("--range SPEC", "Restrict instrumentation per file: FILE:1-5,10-12") do |v|
-    range_specs << v
-  end
-  opts.on("--git-diff [MODE]", "Restrict to git diff: working|staged|base:REV|range:SPEC") do |v|
-    git_diff_mode = v || "working"
-  end
-  opts.on("--git-diff-context N", Integer, "Expand diff hunks by +/-N lines") do |v|
-    git_diff_context = v
-  end
-  opts.on("--git-cmd PATH", "Git executable for diff") do |v|
-    git_cmd = v
-  end
-  opts.on("--git-diff-no-untracked", "Exclude untracked files from git diff ranges") do
-    git_diff_no_untracked = true
-  end
-  opts.on("--verbose", "Print verbose logs to stderr") do
-    verbose_cli = true
-  end
-  opts.on("-h", "--help", "Show help") do
-    puts opts
-    exit 0
-  end
+opts, args, parser = Lumitrace.parse_cli_options(
+  ARGV,
+  banner: "usage: lumitrace FILE [options]",
+  allow_help: true
+)
+if opts[:help]
+  puts parser
+  exit 0
 end
-
-args = parser.parse(ARGV)
 path = args.shift or abort(parser.to_s)
 
-verbose = true if verbose_cli
+opts[:root] = File.expand_path(opts[:root]) if opts[:root] && !opts[:root].strip.empty?
+opts[:ranges_by_file] = Lumitrace.resolve_ranges_by_file(
+  opts[:range_specs],
+  git_diff_mode: opts[:git_diff_mode],
+  git_diff_context: opts[:git_diff_context],
+  git_cmd: opts[:git_cmd],
+  git_diff_no_untracked: opts[:git_diff_no_untracked]
+)
 
-
-
-ranges_by_file = nil
-if range_specs.any?
-  ranges_by_file = Hash.new { |h, k| h[k] = [] }
-  range_specs.each do |spec|
-    file_part, range_part = spec.split(":", 2)
-    if file_part.nil? || file_part.strip.empty?
-      abort "invalid --range (expected FILE or FILE:1-5,10-12): #{spec}"
-    end
-
-    file = File.expand_path(file_part)
-    if range_part.nil? || range_part.strip.empty?
-      ranges_by_file[file] = []
-      next
-    end
-
-    range_part.split(",").each do |seg|
-      seg = seg.strip
-      if seg =~ /\A(\d+)-(\d+)\z/
-        ranges_by_file[file] << ($1.to_i..$2.to_i)
-      else
-        abort "invalid --range segment (expected N-M): #{seg}"
-      end
-    end
-  end
-end
-
-
-if git_diff_mode || git_diff_context || git_cmd || git_diff_no_untracked
-  require_relative "../lib/lumitrace/git_diff"
-  diff_ranges = Lumitrace::GitDiff.ranges(
-    mode: git_diff_mode,
-    context: git_diff_context,
-    git_cmd: git_cmd,
-    include_untracked: !git_diff_no_untracked
-  )
-  if diff_ranges
-    if ranges_by_file
-      diff_ranges.each do |file, ranges|
-        ranges_by_file[file].concat(ranges)
-      end
-    else
-      ranges_by_file = diff_ranges
-    end
-  end
-end
-
-
-root = File.expand_path(root) if root && !root.strip.empty?
 Lumitrace.enable!(
-  max_values: max_values,
-  ranges_by_file: ranges_by_file,
-  root: root,
-  text: text_requested ? (text_out || true) : nil,
-  html: emit_html ? (html_out || true) : nil,
-  json: json_out ? (json_out.empty? ? true : json_out) : nil,
-  verbose: verbose,
+  max_values: opts[:max_values],
+  ranges_by_file: opts[:ranges_by_file],
+  root: opts[:root],
+  text: opts[:text],
+  html: opts[:html],
+  json: opts[:json],
+  verbose: opts[:verbose],
   at_exit: true
 )
 load File.expand_path(path)

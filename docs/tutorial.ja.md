@@ -270,11 +270,18 @@ ENV["LUMITRACE_TEXT"] = "/tmp/lumi.txt"
 require "lumitrace/enable"
 ```
 
-完全に無効化する場合:
+require だけで有効化する場合:
 
 ```ruby
-ENV["LUMITRACE_DISABLE"] = "1"
-require "lumitrace/enable"
+ENV["LUMITRACE_ENABLE"] = "1"
+require "lumitrace"
+```
+
+`LUMITRACE_ENABLE` に CLI 互換のオプションを渡すこともできます:
+
+```ruby
+ENV["LUMITRACE_ENABLE"] = "--text --html /tmp/lumi.html --json"
+require "lumitrace"
 ```
 
 ### 出力先を変更する

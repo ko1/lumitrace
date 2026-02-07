@@ -27,6 +27,14 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 - Returns: nothing.
 - Side effects: loads core code only (no instrumentation, no `at_exit`).
 
+### Library entry points (common usage)
+
+- `require "lumitrace"` + `Lumitrace.enable!(...)`
+- `require "lumitrace/enable"` (calls `Lumitrace.enable!`)
+- `require "lumitrace/enable_git_diff"` (diff-scoped `Lumitrace.enable!`)
+- `LUMITRACE_ENABLE=1` + `require "lumitrace"` (auto-`enable!`)
+- `LUMITRACE_ENABLE="--text --html --json ..."` + `require "lumitrace"` (CLI-style options parsed and passed to `enable!`)
+
 ### `Lumitrace.enable!(max_values: nil, ranges_by_file: nil, root: nil, text: nil, html: nil, json: nil, verbose: nil, at_exit: true)`
 
 - Arguments:
@@ -51,7 +59,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   - `LUMITRACE_JSON`: enable JSON output; `1` uses the default path, otherwise treats the value as the JSON output path. `0`/`false` disables.
   - `LUMITRACE_GIT_DIFF_UNTRACKED`: include untracked files in git diff ranges (`1` default). Set to `0` to exclude.
   - `LUMITRACE_VERBOSE`: when `1`/`true`, prints verbose logs to stderr.
-  - `LUMITRACE_DISABLE`: when `1`/`true`, disables Lumitrace entirely (no instrumentation or output).
+  - `LUMITRACE_ENABLE`: when `1`/`true`, `require "lumitrace"` will call `Lumitrace.enable!`. When set to a non-boolean string, it is parsed as CLI-style arguments and passed to `enable!`.
 
 ### `Lumitrace.disable!`
 

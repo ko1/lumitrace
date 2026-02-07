@@ -270,11 +270,18 @@ ENV["LUMITRACE_TEXT"] = "/tmp/lumi.txt"
 require "lumitrace/enable"
 ```
 
-Disable Lumitrace entirely:
+Enable Lumitrace with a single require:
 
 ```ruby
-ENV["LUMITRACE_DISABLE"] = "1"
-require "lumitrace/enable"
+ENV["LUMITRACE_ENABLE"] = "1"
+require "lumitrace"
+```
+
+You can also pass CLI-style options via `LUMITRACE_ENABLE`:
+
+```ruby
+ENV["LUMITRACE_ENABLE"] = "--text --html /tmp/lumi.html --json"
+require "lumitrace"
 ```
 
 ### Change output paths

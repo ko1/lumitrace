@@ -51,6 +51,44 @@ class LumiTraceTest < Minitest::Test
     end
   end
 
+  def test_parse_cli_options_basic
+    argv = ["--text", "--html", "/tmp/out.html", "--json", "--max", "7", "--root", "/tmp/root",
+            "--range", "a.rb:1-3,5-6", "--verbose", "file.rb"]
+    opts, args, _parser = Lumitrace.parse_cli_options(argv, allow_help: true)
+
+    assert_equal true, opts[:text]
+    assert_equal "/tmp/out.html", opts[:html]
+    assert_equal true, opts[:json]
+    assert_equal 7, opts[:max_values]
+    assert_equal "/tmp/root", opts[:root]
+    assert_equal ["a.rb:1-3,5-6"], opts[:range_specs]
+    assert_equal true, opts[:verbose]
+    assert_equal ["file.rb"], args
+  end
+
+  def test_parse_enable_args_cli_string
+    opts = Lumitrace.parse_enable_args("--text /tmp/out.txt --html --json /tmp/out.json --max 5 --root /tmp/root")
+
+    assert_equal "/tmp/out.txt", opts[:text]
+    assert_equal true, opts[:html]
+    assert_equal "/tmp/out.json", opts[:json]
+    assert_equal 5, opts[:max_values]
+    assert_equal File.expand_path("/tmp/root"), opts[:root]
+  end
+
+  def test_resolve_ranges_by_file_from_specs
+    ranges = Lumitrace.resolve_ranges_by_file(
+      ["a.rb:1-3,5-6", "b.rb"],
+      git_diff_mode: nil,
+      git_diff_context: nil,
+      git_cmd: nil,
+      git_diff_no_untracked: false
+    )
+
+    assert_equal [1..3, 5..6], ranges[File.expand_path("a.rb")]
+    assert_equal [], ranges[File.expand_path("b.rb")]
+  end
+
   def test_require_instruments_multiple_files
     skip "RubyVM::InstructionSequence unavailable" unless defined?(RubyVM::InstructionSequence)
 
