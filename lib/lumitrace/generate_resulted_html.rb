@@ -150,6 +150,49 @@ module GenerateResultedHtml
     out
   end
 
+  def self.comment_value_with_total_for_line(events)
+    best = best_event_for_line(events)
+    return nil unless best
+
+    v = best[:values]&.last
+    total = best[:total]
+    value = format_value(v)
+    if total && total > 1
+      "#{value} (#{ordinal(total)} run)"
+    else
+      value
+    end
+  end
+
+  def self.ordinal(n)
+    n = n.to_i
+    return n.to_s if n <= 0
+    mod100 = n % 100
+    suffix = if mod100 >= 11 && mod100 <= 13
+      "th"
+    else
+      case n % 10
+      when 1 then "st"
+      when 2 then "nd"
+      when 3 then "rd"
+      else "th"
+      end
+    end
+    "#{n}#{suffix}"
+  end
+
+  def self.best_event_for_line(events)
+    return nil if events.empty?
+
+    candidates = events.select { |e| e[:marker] }
+    return nil if candidates.empty?
+
+    candidates.max_by do |e|
+      span = e[:end_col].to_i - e[:start_col].to_i
+      [span, e[:end_col].to_i, -e[:start_col].to_i]
+    end
+  end
+
   def self.summarize_values(values, total = nil)
     return "" if values.nil? || values.empty?
     total ||= values.length
@@ -491,6 +534,70 @@ module GenerateResultedHtml
       </body>
       </html>
     HTML
+  end
+
+  def self.render_text_from_events(source, events, filename: "script.rb", ranges: nil, with_header: true, header_label: nil)
+    events = normalize_events(events)
+    ranges = normalize_ranges(ranges)
+    target_events = events.select { |e| e[:file] == filename }
+
+    out = +""
+    if with_header
+      label = header_label || filename
+      out << "### #{label}\n"
+    end
+
+    raw_lines = source.lines.each_with_index.map do |line, idx|
+      lineno = idx + 1
+      next if ranges && !line_in_ranges?(lineno, ranges)
+      line_text = line.chomp
+      evs = aggregate_events_for_line(target_events, lineno, line_text.length)
+      comment_value = comment_value_with_total_for_line(evs)
+      { text: line_text, comment: comment_value }
+    end.compact
+
+    group = []
+    flush_group = lambda do
+      return if group.empty?
+      max_len = group.map { |l| l[:text].length }.max || 0
+      group.each do |l|
+        if l[:comment] && !l[:comment].to_s.empty?
+          pad = " " * (max_len - l[:text].length)
+          out << "#{l[:text]}#{pad} #=> #{l[:comment]}\n"
+        else
+          out << "#{l[:text]}\n"
+        end
+      end
+      group.clear
+    end
+
+    raw_lines.each do |l|
+      if l[:text].strip.empty?
+        flush_group.call
+        out << "#{l[:text]}\n"
+        next
+      end
+      group << l
+    end
+    flush_group.call
+
+    out
+  end
+
+  def self.render_text_all_from_events(events, root: Dir.pwd, ranges_by_file: nil)
+    events = normalize_events(events)
+    by_file = events.group_by { |e| e[:file] }
+    ranges_by_file = normalize_ranges_by_file(ranges_by_file)
+
+    sections = by_file.keys.sort.map do |path|
+      next unless File.exist?(path)
+      src = File.read(path)
+      ranges = ranges_by_file ? (ranges_by_file[path] || []) : nil
+      rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
+      render_text_from_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel)
+    end.compact
+
+    sections.join("\n")
   end
 end
 
