@@ -544,8 +544,15 @@ module GenerateResultedHtml
     out = +""
     if with_header
       label = header_label || filename
+      if ranges && !ranges.empty?
+        label = "#{label} (lines: #{format_ranges(ranges)})"
+      end
       out << "### #{label}\n"
     end
+
+    total_lines = source.lines.length
+    ln_width = total_lines.to_s.length
+    prefix_for = ->(n) { format("%#{ln_width}d| ", n) }
 
     raw_lines = source.lines.each_with_index.map do |line, idx|
       lineno = idx + 1
@@ -553,7 +560,7 @@ module GenerateResultedHtml
       line_text = line.chomp
       evs = aggregate_events_for_line(target_events, lineno, line_text.length)
       comment_value = comment_value_with_total_for_line(evs)
-      { text: line_text, comment: comment_value }
+      { lineno: lineno, text: line_text, comment: comment_value, prefix: prefix_for.call(lineno) }
     end.compact
 
     group = []
@@ -563,21 +570,27 @@ module GenerateResultedHtml
       group.each do |l|
         if l[:comment] && !l[:comment].to_s.empty?
           pad = " " * (max_len - l[:text].length)
-          out << "#{l[:text]}#{pad} #=> #{l[:comment]}\n"
+          out << "#{l[:prefix]}#{l[:text]}#{pad} #=> #{l[:comment]}\n"
         else
-          out << "#{l[:text]}\n"
+          out << "#{l[:prefix]}#{l[:text]}\n"
         end
       end
       group.clear
     end
 
+    prev_lineno = nil
     raw_lines.each do |l|
+      if prev_lineno && l[:lineno] > prev_lineno + 1
+        flush_group.call
+        out << "...\n"
+      end
       if l[:text].strip.empty?
         flush_group.call
-        out << "#{l[:text]}\n"
-        next
+        out << "#{l[:prefix]}#{l[:text]}\n"
+      else
+        group << l
       end
-      group << l
+      prev_lineno = l[:lineno]
     end
     flush_group.call
 
@@ -598,6 +611,10 @@ module GenerateResultedHtml
     end.compact
 
     sections.join("\n")
+  end
+
+  def self.format_ranges(ranges)
+    ranges.map { |(s, e)| s == e ? s.to_s : "#{s}-#{e}" }.join(", ")
   end
 end
 

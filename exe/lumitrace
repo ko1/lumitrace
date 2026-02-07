@@ -8,8 +8,8 @@ max_values = nil
 range_specs = []
 json_out = nil
 root = ENV["LUMITRACE_ROOT"]
-emit_text = false
-emit_html = true
+emit_text = true
+emit_html = false
 html_requested = false
 
 emit_html = true
