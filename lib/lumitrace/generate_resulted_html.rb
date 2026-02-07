@@ -118,9 +118,10 @@ module GenerateResultedHtml
       value_text = summarize_values(values, total)
       tooltip_html = esc(value_text)
       depth_class = "depth-#{e[:depth]}"
-      open_tag = "<span class=\"expr hit #{depth_class}\">"
+      key_attr = esc(e[:key_id])
+      open_tag = "<span class=\"expr hit #{depth_class}\" data-key=\"#{key_attr}\">"
       if e.fetch(:marker, true)
-        close_tag = "<span class=\"marker\" aria-hidden=\"true\">🔎<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
+        close_tag = "<span class=\"marker\" data-key=\"#{key_attr}\" aria-hidden=\"true\">🔎<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
       else
         close_tag = "</span>"
       end
@@ -195,8 +196,10 @@ module GenerateResultedHtml
 
       next if t <= s
       spans << { start_col: s, end_col: t }
+      key_id = e[:key].join(":")
       buckets[e[:key]] = {
         key: e[:key],
+        key_id: key_id,
         start_col: s,
         end_col: t,
         marker: marker,
@@ -362,6 +365,29 @@ module GenerateResultedHtml
       <body>
         <div class="hint">Hover highlighted text to see recorded values.</div>
         #{sections}
+        <script>
+          (function() {
+            document.querySelectorAll('.marker').forEach(marker => {
+              marker.addEventListener('mouseenter', () => {
+                document.querySelectorAll('.expr').forEach(e => e.classList.remove('active'));
+                const key = marker.dataset.key;
+                if (key) {
+                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.add('active'));
+                } else {
+                  marker.closest('.expr')?.classList.add('active');
+                }
+              });
+              marker.addEventListener('mouseleave', () => {
+                const key = marker.dataset.key;
+                if (key) {
+                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.remove('active'));
+                } else {
+                  marker.closest('.expr')?.classList.remove('active');
+                }
+              });
+            });
+          })();
+        </script>
       </body>
       </html>
     HTML
@@ -444,10 +470,20 @@ module GenerateResultedHtml
             document.querySelectorAll('.marker').forEach(marker => {
               marker.addEventListener('mouseenter', () => {
                 document.querySelectorAll('.expr').forEach(e => e.classList.remove('active'));
-                marker.closest('.expr')?.classList.add('active');
+                const key = marker.dataset.key;
+                if (key) {
+                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.add('active'));
+                } else {
+                  marker.closest('.expr')?.classList.add('active');
+                }
               });
               marker.addEventListener('mouseleave', () => {
-                marker.closest('.expr')?.classList.remove('active');
+                const key = marker.dataset.key;
+                if (key) {
+                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.remove('active'));
+                } else {
+                  marker.closest('.expr')?.classList.remove('active');
+                }
               });
             });
           })();
