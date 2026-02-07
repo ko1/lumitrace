@@ -1,12 +1,12 @@
 # runv
 
-A single-file HTML app that runs Ruby.wasm in the browser and shows both the program output and a [Lumitrace](https://github.com/ko1/lumitrace/) -style annotated source view side by side.
+A single-file HTML app that runs Ruby.wasm in the browser and shows traced values inline alongside program output, using [Lumitrace](https://github.com/ko1/lumitrace/) -style annotation.
 
-[Visit viewer](https://ko1.github.io/runv/)
+[Visit viewer](https://ko1.github.io/lumitrace/runv/)
 
 ## Goals
-- Run Ruby code in the browser and see STDOUT/STDERR immediately
-- Display evaluated values inline on top of the source code
+- Run Ruby code in the browser and see traced values inline
+- Keep STDOUT/STDERR visible alongside the inline results
 - Keep everything in a single `index.html`
 
 ## Layout
