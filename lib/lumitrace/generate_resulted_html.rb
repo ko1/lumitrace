@@ -620,7 +620,7 @@ module GenerateResultedHtml
       render_text_from_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel)
     end.compact
 
-    header = "=== Lumitrace Results (text) ===\n\n"
+    header = "\n=== Lumitrace Results (text) ===\n\n"
     header + sections.join("\n")
   end
 
