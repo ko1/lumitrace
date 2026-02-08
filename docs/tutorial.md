@@ -191,6 +191,12 @@ Use `--range` when you want precise control over which lines are traced.
 lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
+You can also pass ranges via env (semicolon-separated) when wrapping another command:
+
+```bash
+LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
+```
+
 ### Diff-based ranges
 
 Let Git choose the interesting lines by tracing only changes from `git diff`; this keeps review noise low.
@@ -273,12 +279,6 @@ For a practical CI setup (including `LUMITRACE_GIT_DIFF` and Pages upload), see 
 If your app forks or execs, this explains how Lumitrace merges results across processes.
 
 Fork/exec results are merged by default. The parent process writes final output; child processes only write fragments under `LUMITRACE_RESULTS_DIR`.
-
-You can pass ranges via env (semicolon-separated):
-
-```bash
-LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
-```
 
 ## 2. Library Mode
 

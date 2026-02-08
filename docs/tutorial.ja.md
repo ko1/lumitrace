@@ -191,6 +191,12 @@ LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
 lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
+別コマンドをラップするときは、環境変数で range を渡せます（`;` 区切り）:
+
+```bash
+LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
+```
+
 ### 差分だけ計測（CLI）
 
 変更行だけを自動で追うと、レビュー時のノイズが減ります。
@@ -274,12 +280,6 @@ GitHub Actions への追加手順（`LUMITRACE_GIT_DIFF` や Pages へのアッ�
 プロセスが増える構成のとき、結果がどう合流するかを押さえます。
 
 fork/exec の結果はデフォルトでマージされます。親プロセスが最終出力を行い、子プロセスは `LUMITRACE_RESULTS_DIR` に断片 JSON を保存します。
-
-環境変数で range を渡す場合（`;` 区切り）:
-
-```bash
-LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
-```
 
 ## 2. ライブラリとして使う
 
