@@ -2,7 +2,6 @@ name: Lumitrace Sample
 
 on:
   pull_request:
-  push:
 
 jobs:
   run-lumitrace:
@@ -25,18 +24,10 @@ jobs:
       - name: Install dependencies
         run: bundle install
 
-      - name: Debug repo context
-        run: |
-          pwd
-          ls -a
-          git rev-parse --show-toplevel || true
-          git status -sb || true
-
       - name: Run tests with Lumitrace
         env:
-          LUMITRACE_GIT_DIFF: ${{ github.event_name == 'pull_request' && format('range:origin/{0}...HEAD', github.base_ref) || 'range:HEAD~1...HEAD' }}
-          LUMITRACE_HTML_OUT: "${{ github.workspace }}/lumitrace_recorded.html"
-        run: bundle exec ruby -r lumitrace/enable_git_diff test/test_sample_test.rb
+          LUMITRACE_GIT_DIFF: range:origin/${{ github.base_ref }}...HEAD
+        run: bundle exec lumitrace -v -t --html=lumitrace_recorded.html exec rake test
 
       - name: Prepare Pages content
         run: |
