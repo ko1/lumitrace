@@ -10,7 +10,7 @@ This is a short, practical guide to using Lumitrace.
 Run the bundled sample with the simplest command (text output goes to stdout by default):
 
 ```bash
-ruby exe/lumitrace sample/sample.rb
+lumitrace sample/sample.rb
 ```
 
 The program’s own stdout is still printed, and Lumitrace text output follows it.
@@ -98,7 +98,7 @@ n0=2, n1=5, n2=11
 Run the bundled sample and write both text and HTML outputs:
 
 ```bash
-ruby exe/lumitrace sample/sample.rb \
+lumitrace sample/sample.rb \
   --text sample/lumitrace_results_01.txt \
   --html sample/lumitrace_results_01.html
 ```
@@ -115,7 +115,7 @@ View the HTML output:
 Run with ranges and save separate outputs:
 
 ```bash
-ruby exe/lumitrace sample/sample.rb \
+lumitrace sample/sample.rb \
   --text sample/lumitrace_results_02.txt \
   --html sample/lumitrace_results_02.html \
   --range sample/sample.rb:4-18,28-32
@@ -156,48 +156,48 @@ View the HTML output:
 Enable HTML output via env:
 
 ```bash
-LUMITRACE_HTML=1 ruby exe/lumitrace path/to/entry.rb
-LUMITRACE_HTML=/tmp/out.html ruby exe/lumitrace path/to/entry.rb
+LUMITRACE_HTML=1 lumitrace path/to/entry.rb
+LUMITRACE_HTML=/tmp/out.html lumitrace path/to/entry.rb
 ```
 
 ### Limit recorded values
 
 ```bash
-LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb
+LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
 ```
 
 ### Limit to specific lines
 
 ```bash
-ruby exe/lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
+lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
 ### Diff-based ranges
 
 ```bash
-ruby exe/lumitrace -g path/to/entry.rb
-ruby exe/lumitrace --git-diff=staged path/to/entry.rb
-ruby exe/lumitrace --git-diff=base:HEAD~1 path/to/entry.rb
-ruby exe/lumitrace --git-diff-context 5 path/to/entry.rb
-ruby exe/lumitrace --git-cmd /usr/local/bin/git path/to/entry.rb
+lumitrace -g path/to/entry.rb
+lumitrace --git-diff=staged path/to/entry.rb
+lumitrace --git-diff=base:HEAD~1 path/to/entry.rb
+lumitrace --git-diff-context 5 path/to/entry.rb
+lumitrace --git-cmd /usr/local/bin/git path/to/entry.rb
 ```
 
 Exclude untracked files:
 
 ```bash
-ruby exe/lumitrace -g --git-diff-no-untracked path/to/entry.rb
+lumitrace -g --git-diff-no-untracked path/to/entry.rb
 ```
 
 ### Verbose logs
 
 ```bash
-ruby exe/lumitrace --verbose path/to/entry.rb
+lumitrace --verbose path/to/entry.rb
 ```
 
 ### Write JSON too
 
 ```bash
-ruby exe/lumitrace -j path/to/entry.rb
+lumitrace -j path/to/entry.rb
 ```
 
 This creates `lumitrace_recorded.json`. HTML is written only when `--html` is also specified.
@@ -205,25 +205,25 @@ This creates `lumitrace_recorded.json`. HTML is written only when `--html` is al
 ### Text output to stdout
 
 ```bash
-ruby exe/lumitrace -t path/to/entry.rb
+lumitrace -t path/to/entry.rb
 ```
 
 ### Text output to a file
 
 ```bash
-ruby exe/lumitrace --text=/tmp/lumi.txt path/to/entry.rb
+lumitrace --text=/tmp/lumi.txt path/to/entry.rb
 ```
 
 ### Text plus HTML
 
 ```bash
-ruby exe/lumitrace -t -h path/to/entry.rb
+lumitrace -t -h path/to/entry.rb
 ```
 
 ### Running with exec
 
 ```bash
-ruby exe/lumitrace --html=sample/lumitrace_rake.html exec rake
+lumitrace --html=sample/lumitrace_rake.html exec rake
 ```
 
 HTML output:

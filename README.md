@@ -23,38 +23,38 @@ Lumitrace hooks `RubyVM::InstructionSequence.translate` (when available) to rewr
 Run a script and emit text output (default):
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb
+lumitrace path/to/entry.rb
 ```
 
 Run another command via exec:
 
 ```bash
-ruby exe/lumitrace exec rake test
+lumitrace exec rake test
 ```
 
 Emit HTML output:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb -h
+lumitrace -h path/to/entry.rb
 ```
 
 Limit the number of recorded values per expression (defaults to 3):
 
 ```bash
-LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb
+LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
 ```
 
 Write JSON output explicitly:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb -j
-ruby exe/lumitrace path/to/entry.rb -j out/lumitrace_recorded.json
+lumitrace -j path/to/entry.rb
+lumitrace --json=out/lumitrace_recorded.json path/to/entry.rb
 ```
 
 Restrict to specific line ranges:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --range path/to/entry.rb:10-20,30-35
+lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
 ### Library
@@ -119,5 +119,5 @@ bundle install
 Run the CLI locally:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb
+lumitrace path/to/entry.rb
 ```

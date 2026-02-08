@@ -10,7 +10,7 @@
 同梱の sample を最小のコマンドで実行します（テキストは stdout に出ます）:
 
 ```bash
-ruby exe/lumitrace sample/sample.rb
+lumitrace sample/sample.rb
 ```
 
 プログラム本体の stdout はそのまま出力され、続けて Lumitrace のテキストが表示されます。
@@ -98,7 +98,7 @@ n0=2, n1=5, n2=11
 同梱の sample を実行して、テキストと HTML を保存します:
 
 ```bash
-ruby exe/lumitrace sample/sample.rb \
+lumitrace sample/sample.rb \
   --text sample/lumitrace_results_01.txt \
   --html sample/lumitrace_results_01.html
 ```
@@ -115,7 +115,7 @@ HTML 出力を見る:
 範囲を指定して、別の出力として保存します:
 
 ```bash
-ruby exe/lumitrace sample/sample.rb \
+lumitrace sample/sample.rb \
   --text sample/lumitrace_results_02.txt \
   --html sample/lumitrace_results_02.html \
   --range sample/sample.rb:4-18,28-32
@@ -156,48 +156,48 @@ HTML 出力を見る:
 環境変数で HTML を有効化:
 
 ```bash
-LUMITRACE_HTML=1 ruby exe/lumitrace path/to/entry.rb
-LUMITRACE_HTML=/tmp/out.html ruby exe/lumitrace path/to/entry.rb
+LUMITRACE_HTML=1 lumitrace path/to/entry.rb
+LUMITRACE_HTML=/tmp/out.html lumitrace path/to/entry.rb
 ```
 
 ### 記録する値の数を減らす
 
 ```bash
-LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb
+LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
 ```
 
 ### 行範囲を限定する
 
 ```bash
-ruby exe/lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
+lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
 ### 差分だけ計測（CLI）
 
 ```bash
-ruby exe/lumitrace -g path/to/entry.rb
-ruby exe/lumitrace --git-diff=staged path/to/entry.rb
-ruby exe/lumitrace --git-diff=base:HEAD~1 path/to/entry.rb
-ruby exe/lumitrace --git-diff-context 5 path/to/entry.rb
-ruby exe/lumitrace --git-cmd /usr/local/bin/git path/to/entry.rb
+lumitrace -g path/to/entry.rb
+lumitrace --git-diff=staged path/to/entry.rb
+lumitrace --git-diff=base:HEAD~1 path/to/entry.rb
+lumitrace --git-diff-context 5 path/to/entry.rb
+lumitrace --git-cmd /usr/local/bin/git path/to/entry.rb
 ```
 
 未追跡ファイルを除外:
 
 ```bash
-ruby exe/lumitrace -g --git-diff-no-untracked path/to/entry.rb
+lumitrace -g --git-diff-no-untracked path/to/entry.rb
 ```
 
 ### 詳細ログ
 
 ```bash
-ruby exe/lumitrace --verbose path/to/entry.rb
+lumitrace --verbose path/to/entry.rb
 ```
 
 ### JSON も出力する
 
 ```bash
-ruby exe/lumitrace -j path/to/entry.rb
+lumitrace -j path/to/entry.rb
 ```
 
 `lumitrace_recorded.json` が生成されます（HTML は `--html` を指定したときだけ出力されます）。
@@ -205,25 +205,25 @@ ruby exe/lumitrace -j path/to/entry.rb
 ### stdout にテキスト出力
 
 ```bash
-ruby exe/lumitrace -t path/to/entry.rb
+lumitrace -t path/to/entry.rb
 ```
 
 ### テキストをファイルに出力
 
 ```bash
-ruby exe/lumitrace --text=/tmp/lumi.txt path/to/entry.rb
+lumitrace --text=/tmp/lumi.txt path/to/entry.rb
 ```
 
 ### テキストと HTML を両方出力
 
 ```bash
-ruby exe/lumitrace -t -h path/to/entry.rb
+lumitrace -t -h path/to/entry.rb
 ```
 
 ### exec で実行
 
 ```bash
-ruby exe/lumitrace --html=sample/lumitrace_rake.html exec rake
+lumitrace --html=sample/lumitrace_rake.html exec rake
 ```
 
 HTML 出力:

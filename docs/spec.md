@@ -172,7 +172,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 
 ## CLI
 
-### `exe/lumitrace`
+### `lumitrace`
 
 ```
 lumitrace [options] script.rb [ruby_opt]
