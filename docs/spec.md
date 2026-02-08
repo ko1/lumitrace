@@ -33,7 +33,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 - `require "lumitrace/enable"` (calls `Lumitrace.enable!`)
 - `require "lumitrace/enable_git_diff"` (diff-scoped `Lumitrace.enable!`)
 - `LUMITRACE_ENABLE=1` + `require "lumitrace"` (auto-`enable!`)
-- `LUMITRACE_ENABLE="--text --html --json ..."` + `require "lumitrace"` (CLI-style options parsed and passed to `enable!`)
+- `LUMITRACE_ENABLE="-t -h -j ..."` + `require "lumitrace"` (CLI-style options parsed and passed to `enable!`)
 
 ### `Lumitrace.enable!(max_values: nil, ranges_by_file: nil, root: nil, text: nil, html: nil, json: nil, verbose: nil, at_exit: true)`
 
@@ -60,6 +60,9 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   - `LUMITRACE_GIT_DIFF_UNTRACKED`: include untracked files in git diff ranges (`1` default). Set to `0` to exclude.
   - `LUMITRACE_VERBOSE`: when `1`/`true`, prints verbose logs to stderr.
   - `LUMITRACE_ENABLE`: when `1`/`true`, `require "lumitrace"` will call `Lumitrace.enable!`. When set to a non-boolean string, it is parsed as CLI-style arguments and passed to `enable!`.
+  - `LUMITRACE_RANGE`: semicolon-separated range specs, e.g. `a.rb:1-3,5-6;b.rb`.
+  - `LUMITRACE_RESULTS_DIR`: internal use. Shared results directory for fork/exec merge (default: `Dir.tmpdir/lumitrace_results/<user>_<parent_pid>`).
+  - `LUMITRACE_RESULTS_PARENT_PID`: internal use. Parent PID for fork/exec merge (auto-set).
 
 ### `Lumitrace.disable!`
 
@@ -85,6 +88,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   - `LUMITRACE_GIT_DIFF=working|staged|base:REV|range:SPEC` selects diff source.
   - `LUMITRACE_GIT_DIFF_CONTEXT=N` expands hunks by +/-N lines (default 3; negative treated as 0).
   - `LUMITRACE_GIT_CMD` overrides the git executable (default: `git`).
+  - `LUMITRACE_RANGE` can be used to pass explicit ranges via env.
 
 ## Instrumentation
 
@@ -142,6 +146,14 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 - Values are stored via `inspect` for non-primitive types.
 - String values are truncated to 1000 bytes for storage.
 
+## Fork/Exec Merge
+
+- Fork/exec results are merged by default.
+- The parent process writes final text/HTML/JSON.
+- Child processes write JSON fragments under `LUMITRACE_RESULTS_DIR` and do not write final outputs.
+- When `Process._fork` is available, Lumitrace hooks it to reset child events immediately after fork.
+- `exec` inherits `LUMITRACE_RESULTS_DIR` and `LUMITRACE_RESULTS_PARENT_PID` via the environment. `Lumitrace.enable!` also appends `-rlumitrace` to `RUBYOPT` to ensure the exec'd process loads Lumitrace.
+
 ### Output JSON
 
 `lumitrace_recorded.json` contains an array of entries:
@@ -163,22 +175,24 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 ### `exe/lumitrace`
 
 ```
-lumitrace FILE [--text [PATH]] [--html [PATH]] [--json [PATH]] [--max N] [--range SPEC] [--git-diff [MODE]] [--git-diff-context N] [--git-cmd PATH] [--git-diff-no-untracked]
+lumitrace [options] script.rb [ruby_opt]
+lumitrace [options] exec CMD [args...]
 ```
 
 - Text is rendered by default (from in-memory events; no JSON file is required).
-- `--text` writes text output to stdout (default). When a PATH is provided, writes text output to that file.
-- `--html` enables HTML output; optionally specify the output path.
-- JSON is written only when `--json` is provided.
-- `--json` writes JSON output (default: `lumitrace_recorded.json`).
+- `-t` enables text output to stdout. `--text=PATH` writes to a file.
+- `-h` enables HTML output (default path). `--html=PATH` writes to a file.
+- `-j` enables JSON output (default path). `--json=PATH` writes to a file.
+- `-g` enables git diff with `working` mode. `--git-diff=MODE` selects `staged|base:REV|range:SPEC`.
 - `--max` sets max values per expression.
 - `--range` restricts instrumentation per file (`FILE` or `FILE:1-5,10-12`). Can be repeated.
-- `--git-diff` restricts instrumentation to diff hunks (`working` default; `staged|base:REV|range:SPEC`).
+- `--git-diff=MODE` restricts instrumentation to diff hunks (`staged|base:REV|range:SPEC`).
 - `--git-diff-context` expands hunks by +/-N lines.
 - `--git-cmd` overrides the git executable.
 - `--git-diff-no-untracked` excludes untracked files (untracked files are included by default).
 - `--verbose` prints verbose logs to stderr.
 - `LUMITRACE_VALUES_MAX` sets the default max values per expression.
+- The CLI launches a child process (Ruby or `exec` target) with `RUBYOPT=-rlumitrace` and `LUMITRACE_*` env vars.
 
 ### Text Output (CLI)
 

@@ -52,7 +52,7 @@ class LumiTraceTest < Minitest::Test
   end
 
   def test_parse_cli_options_basic
-    argv = ["--text", "--html", "/tmp/out.html", "--json", "--max", "7", "--root", "/tmp/root",
+    argv = ["-t", "--html=/tmp/out.html", "-j", "--max", "7", "--root", "/tmp/root",
             "--range", "a.rb:1-3,5-6", "--verbose", "file.rb"]
     opts, args, _parser = Lumitrace.parse_cli_options(argv, allow_help: true)
 
@@ -67,7 +67,7 @@ class LumiTraceTest < Minitest::Test
   end
 
   def test_parse_enable_args_cli_string
-    opts = Lumitrace.parse_enable_args("--text /tmp/out.txt --html --json /tmp/out.json --max 5 --root /tmp/root")
+    opts = Lumitrace.parse_enable_args("--text=/tmp/out.txt -h --json=/tmp/out.json --max 5 --root /tmp/root")
 
     assert_equal "/tmp/out.txt", opts[:text]
     assert_equal true, opts[:html]
@@ -87,6 +87,75 @@ class LumiTraceTest < Minitest::Test
 
     assert_equal [1..3, 5..6], ranges[File.expand_path("a.rb")]
     assert_equal [], ranges[File.expand_path("b.rb")]
+  end
+
+  def test_results_dir_defaults_to_tmpdir
+    Dir.mktmpdir do |dir|
+      ENV["LUMITRACE_RESULTS_DIR"] = nil
+      ENV["LUMITRACE_RESULTS_PARENT_PID"] = nil
+      Dir.chdir(dir) do
+        Lumitrace.setup_results_dir
+        assert_includes ENV["LUMITRACE_RESULTS_DIR"], Dir.tmpdir
+        assert_equal Process.pid, ENV["LUMITRACE_RESULTS_PARENT_PID"].to_i
+      end
+    end
+  ensure
+    ENV.delete("LUMITRACE_RESULTS_DIR")
+    ENV.delete("LUMITRACE_RESULTS_PARENT_PID")
+  end
+
+  def test_merge_events_applies_max_values
+    events = [
+      { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 1, values: [1, 2], total: 2 },
+      { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 1, values: [3, 4], total: 2 }
+    ]
+
+    merged = Lumitrace::RecordInstrument.merge_events(events, max_values: 3)
+    assert_equal 1, merged.size
+    assert_equal 4, merged[0][:total]
+    assert_equal [2, 3, 4], merged[0][:values]
+  end
+
+  def test_env_range_parsing
+    ENV["LUMITRACE_RANGE"] = "a.rb:1-3,5-6;b.rb"
+    env = Lumitrace.resolve_env_options
+    assert_equal ["a.rb:1-3,5-6", "b.rb"], env[:range_specs]
+  ensure
+    ENV.delete("LUMITRACE_RANGE")
+  end
+
+  def test_exec_merges_to_results_dir
+    skip "fork not supported" unless Process.respond_to?(:fork)
+    Dir.mktmpdir do |dir|
+      Dir.chdir(dir) do
+        ENV.delete("LUMITRACE_RESULTS_DIR")
+        ENV.delete("LUMITRACE_RESULTS_PARENT_PID")
+
+        Lumitrace.enable!(text: false, html: false, json: false, at_exit: false)
+        Lumitrace.setup_results_dir
+        parent_dir = ENV["LUMITRACE_RESULTS_DIR"]
+        assert parent_dir && !parent_dir.empty?
+
+        pid = Process.fork do
+          env = {
+            "RUBYLIB" => [File.expand_path("../lib", __dir__), ENV["RUBYLIB"]].compact.join(":")
+          }
+          exec(
+            env,
+            RbConfig.ruby,
+            "-e",
+            "require 'lumitrace'; Lumitrace.enable!(text:false,html:false,json:false); Lumitrace::RecordInstrument.expr_record('x.rb',1,0,1,1,1)"
+          )
+        end
+        Process.wait(pid)
+
+        files = Dir.glob(File.join(parent_dir, "child_*.json"))
+        assert files.any?, "expected child json under #{parent_dir}"
+      end
+    end
+  ensure
+    ENV.delete("LUMITRACE_RESULTS_DIR")
+    ENV.delete("LUMITRACE_RESULTS_PARENT_PID")
   end
 
   def test_require_instruments_multiple_files

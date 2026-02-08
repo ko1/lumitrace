@@ -169,35 +169,35 @@ LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb
 ### 行範囲を限定する
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --range path/to/entry.rb:10-20,30-35
+ruby exe/lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
 ### 差分だけ計測（CLI）
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --git-diff
-ruby exe/lumitrace path/to/entry.rb --git-diff staged
-ruby exe/lumitrace path/to/entry.rb --git-diff base:HEAD~1
-ruby exe/lumitrace path/to/entry.rb --git-diff-context 5
-ruby exe/lumitrace path/to/entry.rb --git-cmd /usr/local/bin/git
+ruby exe/lumitrace -g path/to/entry.rb
+ruby exe/lumitrace --git-diff=staged path/to/entry.rb
+ruby exe/lumitrace --git-diff=base:HEAD~1 path/to/entry.rb
+ruby exe/lumitrace --git-diff-context 5 path/to/entry.rb
+ruby exe/lumitrace --git-cmd /usr/local/bin/git path/to/entry.rb
 ```
 
 未追跡ファイルを除外:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --git-diff --git-diff-no-untracked
+ruby exe/lumitrace -g --git-diff-no-untracked path/to/entry.rb
 ```
 
 ### 詳細ログ
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --verbose
+ruby exe/lumitrace --verbose path/to/entry.rb
 ```
 
 ### JSON も出力する
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --json
+ruby exe/lumitrace -j path/to/entry.rb
 ```
 
 `lumitrace_recorded.json` が生成されます（HTML は `--html` を指定したときだけ出力されます）。
@@ -205,19 +205,38 @@ ruby exe/lumitrace path/to/entry.rb --json
 ### stdout にテキスト出力
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --text
+ruby exe/lumitrace -t path/to/entry.rb
 ```
 
 ### テキストをファイルに出力
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --text /tmp/lumi.txt
+ruby exe/lumitrace --text=/tmp/lumi.txt path/to/entry.rb
 ```
 
 ### テキストと HTML を両方出力
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --text --html
+ruby exe/lumitrace -t -h path/to/entry.rb
+```
+
+### exec で実行
+
+```bash
+ruby exe/lumitrace --html=sample/lumitrace_rake.html exec rake
+```
+
+HTML 出力:
+- [lumitrace_rake.html](https://ko1.github.io/lumitrace/sample/lumitrace_rake.html)
+
+### Fork/exec のマージ
+
+fork/exec の結果はデフォルトでマージされます。親プロセスが最終出力を行い、子プロセスは `LUMITRACE_RESULTS_DIR` に断片 JSON を保存します。
+
+環境変数で range を渡す場合（`;` 区切り）:
+
+```bash
+LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
 ```
 
 ## 2. ライブラリとして使う
@@ -280,9 +299,11 @@ require "lumitrace"
 `LUMITRACE_ENABLE` に CLI 互換のオプションを渡すこともできます:
 
 ```ruby
-ENV["LUMITRACE_ENABLE"] = "--text --html /tmp/lumi.html --json"
+ENV["LUMITRACE_ENABLE"] = "-t --html=/tmp/lumi.html -j"
 require "lumitrace"
 ```
+
+exec 先でも読み込まれるように、Lumitrace は `RUBYOPT=-rlumitrace` を設定します。
 
 ### 出力先を変更する
 

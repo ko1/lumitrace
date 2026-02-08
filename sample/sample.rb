@@ -1,5 +1,5 @@
-require './sample/sample2'
-require './sample/sample3'
+require_relative "sample2"
+require_relative "sample3"
 
 def score(n)
   base = n + 1

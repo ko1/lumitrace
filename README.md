@@ -26,10 +26,16 @@ Run a script and emit text output (default):
 ruby exe/lumitrace path/to/entry.rb
 ```
 
+Run another command via exec:
+
+```bash
+ruby exe/lumitrace exec rake test
+```
+
 Emit HTML output:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --html
+ruby exe/lumitrace path/to/entry.rb -h
 ```
 
 Limit the number of recorded values per expression (defaults to 3):
@@ -41,8 +47,8 @@ LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb
 Write JSON output explicitly:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --json
-ruby exe/lumitrace path/to/entry.rb --json out/lumitrace_recorded.json
+ruby exe/lumitrace path/to/entry.rb -j
+ruby exe/lumitrace path/to/entry.rb -j out/lumitrace_recorded.json
 ```
 
 Restrict to specific line ranges:
@@ -74,9 +80,10 @@ require "lumitrace/enable"
 
 ## Output
 
-- Text: printed by default; use `--text PATH` to write to a file.
-- HTML: `lumitrace_recorded.html` by default, or `--html PATH`.
+- Text: printed by default; use `--text=PATH` to write to a file.
+- HTML: `lumitrace_recorded.html` by default, or `--html=PATH`.
 - JSON: written only when `--json` (CLI) or `LUMITRACE_JSON` (library/CLI) is provided. Default filename is `lumitrace_recorded.json`.
+- Fork/exec: merged by default. Child processes write fragments under `LUMITRACE_RESULTS_DIR`.
 
 ## Environment Variables
 
@@ -87,6 +94,9 @@ require "lumitrace/enable"
 - `LUMITRACE_JSON`: enable JSON output; `1` uses the default path, otherwise treats the value as the JSON output path. `0`/`false` disables.
 - `LUMITRACE_ENABLE`: when `1`/`true`, `require "lumitrace"` will call `Lumitrace.enable!`. When set to a non-boolean string, it is parsed as CLI-style arguments and passed to `enable!`.
 - `LUMITRACE_VERBOSE`: when `1`/`true`, prints verbose logs to stderr.
+- `LUMITRACE_RANGE`: semicolon-separated range specs (e.g. `a.rb:1-3,5-6;b.rb`).
+- `LUMITRACE_RESULTS_DIR`: internal use. Shared results directory for fork/exec merge (default: `Dir.tmpdir/lumitrace_results/<user>_<parent_pid>`).
+- `LUMITRACE_RESULTS_PARENT_PID`: internal use. Parent PID for fork/exec merge (auto-set).
 - `LUMITRACE_GIT_DIFF=working|staged|base:REV|range:SPEC`: diff source for `enable_git_diff`.
 - `LUMITRACE_GIT_DIFF_CONTEXT=N`: expand diff hunks by +/-N lines (default 3).
 - `LUMITRACE_GIT_CMD`: git executable override (default `git`).

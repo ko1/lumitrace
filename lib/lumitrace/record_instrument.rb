@@ -201,8 +201,73 @@ module RecordInstrument
 
   def self.dump_json(path = nil)
     path ||= File.expand_path("lumitrace_recorded.json", Dir.pwd)
-    File.write(path, JSON.dump(@events_by_key.values))
+    File.write(path, JSON.dump(@events_by_key.values), perm: 0o600)
     path
+  end
+
+  def self.dump_events_json(events, path = nil)
+    path ||= File.expand_path("lumitrace_recorded.json", Dir.pwd)
+    File.write(path, JSON.dump(events), perm: 0o600)
+    path
+  end
+
+  def self.load_events_json(path)
+    JSON.parse(File.read(path))
+  end
+
+  def self.merge_events(events, max_values: nil)
+    by_key = {}
+    events.each do |e|
+      file = e[:file] || e["file"]
+      start_line = e[:start_line] || e["start_line"]
+      start_col = e[:start_col] || e["start_col"]
+      end_line = e[:end_line] || e["end_line"]
+      end_col = e[:end_col] || e["end_col"]
+      values = e[:values] || e["values"] || []
+      total = e[:total] || e["total"] || 0
+
+      key = [file, start_line, start_col, end_line, end_col]
+      entry = (by_key[key] ||= {
+        file: file,
+        start_line: start_line,
+        start_col: start_col,
+        end_line: end_line,
+        end_col: end_col,
+        values: [],
+        total: 0
+      })
+
+      entry[:total] += total.to_i
+      entry[:values].concat(values)
+      if max_values && max_values.to_i > 0 && entry[:values].length > max_values.to_i
+        entry[:values] = entry[:values].last(max_values.to_i)
+      end
+    end
+    by_key.values
+  end
+
+  def self.merge_child_events(base_events, dir, max_values: nil, logger: nil)
+    return base_events unless dir && Dir.exist?(dir)
+    files = Dir.glob(File.join(dir, "child_*.json"))
+    return base_events if files.empty?
+
+    logger&.call("merge: child_files=#{files.length}")
+    merged = base_events.dup
+    files.each do |path|
+      begin
+        data = load_events_json(path)
+      rescue StandardError
+        logger&.call("merge: skip unreadable #{path}")
+        next
+      end
+      merged.concat(data)
+      begin
+        File.delete(path)
+      rescue StandardError
+        nil
+      end
+    end
+    merge_events(merged, max_values: max_values)
   end
 
   def self.events

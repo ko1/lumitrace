@@ -1,36 +1,72 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require "rbconfig"
 require_relative "../lib/lumitrace"
 
 opts, args, parser = Lumitrace.parse_cli_options(
   ARGV,
-  banner: "usage: lumitrace FILE [options]",
-  allow_help: true
+  banner: "usage: lumitrace [options] script.rb [ruby_opt] | lumitrace [options] exec CMD [args...]",
+  allow_help: true,
+  order: :preserve
 )
 if opts[:help]
   puts parser
   exit 0
 end
-path = args.shift or abort(parser.to_s)
 
-opts[:root] = File.expand_path(opts[:root]) if opts[:root] && !opts[:root].strip.empty?
-opts[:ranges_by_file] = Lumitrace.resolve_ranges_by_file(
-  opts[:range_specs],
-  git_diff_mode: opts[:git_diff_mode],
-  git_diff_context: opts[:git_diff_context],
-  git_cmd: opts[:git_cmd],
-  git_diff_no_untracked: opts[:git_diff_no_untracked]
-)
+if args.empty?
+  warn parser.to_s
+  exit 1
+end
 
-Lumitrace.enable!(
-  max_values: opts[:max_values],
-  ranges_by_file: opts[:ranges_by_file],
-  root: opts[:root],
-  text: opts[:text],
-  html: opts[:html],
-  json: opts[:json],
-  verbose: opts[:verbose],
-  at_exit: true
-)
-load File.expand_path(path)
+if opts[:git_diff_mode] == "exec" && args.first != "exec"
+  args.unshift("exec")
+  opts[:git_diff_mode] = "working"
+end
+
+env = {}
+env["LUMITRACE_ENABLE"] = "1"
+env["LUMITRACE_TEXT"] = opts[:text] == true ? "1" : opts[:text] == false ? "0" : opts[:text].to_s if !opts[:text].nil?
+env["LUMITRACE_HTML"] = opts[:html] == true ? "1" : opts[:html] == false ? "0" : opts[:html].to_s if !opts[:html].nil?
+env["LUMITRACE_JSON"] = opts[:json] == true ? "1" : opts[:json] == false ? "0" : opts[:json].to_s if !opts[:json].nil?
+env["LUMITRACE_VALUES_MAX"] = opts[:max_values].to_s if opts[:max_values]
+env["LUMITRACE_ROOT"] = opts[:root] if opts[:root]
+env["LUMITRACE_VERBOSE"] = opts[:verbose] ? "1" : "0" if !opts[:verbose].nil?
+if opts[:range_specs].any?
+  env["LUMITRACE_RANGE"] = opts[:range_specs].join(";")
+end
+if opts[:git_diff_mode]
+  env["LUMITRACE_GIT_DIFF"] = opts[:git_diff_mode]
+end
+if opts[:git_diff_context]
+  env["LUMITRACE_GIT_DIFF_CONTEXT"] = opts[:git_diff_context].to_s
+end
+if opts[:git_cmd]
+  env["LUMITRACE_GIT_CMD"] = opts[:git_cmd]
+end
+if opts[:git_diff_no_untracked]
+  env["LUMITRACE_GIT_DIFF_UNTRACKED"] = "0"
+end
+
+lib_dir = File.expand_path("../lib", __dir__)
+ruby_lib = ENV["RUBYLIB"].to_s
+env["RUBYLIB"] = ([lib_dir] + ruby_lib.split(":")).uniq.join(":")
+
+rubyopt = ENV["RUBYOPT"].to_s
+unless rubyopt.split.any? { |t| t == "-rlumitrace" || t == "-rlumitrace/enable" }
+  rubyopt = rubyopt.strip.empty? ? "-rlumitrace" : "#{rubyopt} -rlumitrace"
+end
+env["RUBYOPT"] = rubyopt
+
+if args[0] == "exec"
+  cmd = args[1..]
+  if cmd.nil? || cmd.empty?
+    warn "lumitrace exec: missing command"
+    exit 1
+  end
+  exec(env, *cmd)
+else
+  script = args.shift
+  exec(env, RbConfig.ruby, script, *args)
+end

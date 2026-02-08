@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+require "tmpdir"
 require_relative "lumitrace/version"
 require_relative "lumitrace/record_instrument"
 require_relative "lumitrace/generate_resulted_html"
@@ -11,10 +13,115 @@ module Lumitrace
   @atexit_output_root = nil
   @atexit_ranges_by_file = nil
   @verbose = false
+  @fork_hook_installed = false
+  @fork_child = false
+  @results_dir = nil
+  @results_parent_pid = nil
 
   def self.verbose_log(message)
     return unless @verbose
     $stderr.puts("[lumitrace] #{message}")
+  end
+
+  def self.install_fork_hook
+    return if @fork_hook_installed
+    return unless Process.respond_to?(:_fork)
+    @fork_hook_installed = true
+
+    mod = Module.new do
+      def _fork
+        pid = super
+        Lumitrace.after_fork_child! if pid == 0
+        pid
+      end
+    end
+    Process.singleton_class.prepend(mod)
+    verbose_log("fork: Process._fork hook installed")
+  end
+
+  def self.after_fork_child!
+    @fork_child = true
+    return unless defined?(RecordInstrument)
+    RecordInstrument.reset_events!
+    verbose_log("fork: child reset events (pid=#{Process.pid})")
+  end
+
+  def self.results_parent?
+    @results_parent_pid && Process.pid == @results_parent_pid
+  end
+
+  def self.results_child?
+    @results_parent_pid && Process.pid != @results_parent_pid
+  end
+
+  def self.setup_results_dir
+    require "fileutils"
+    dir = ENV["LUMITRACE_RESULTS_DIR"]
+    if dir.nil? || dir.strip.empty?
+      user = ENV["USER"] || ENV["LOGNAME"] || Process.uid.to_s
+      user = user.gsub(/[^A-Za-z0-9_.-]/, "_")
+      dir = File.join(Dir.tmpdir, "lumitrace_results", "#{user}_#{Process.pid}")
+      ENV["LUMITRACE_RESULTS_DIR"] = dir
+    end
+    dir = File.expand_path(dir, Dir.pwd)
+    parent_pid = ENV["LUMITRACE_RESULTS_PARENT_PID"]
+    if parent_pid.nil? || parent_pid.to_s.strip.empty?
+      parent_pid = Process.pid.to_s
+      ENV["LUMITRACE_RESULTS_PARENT_PID"] = parent_pid
+    end
+    @results_dir = dir
+    @results_parent_pid = parent_pid.to_i
+    FileUtils.mkdir_p(@results_dir, mode: 0o700)
+    begin
+      File.chmod(0o700, @results_dir)
+    rescue StandardError
+      nil
+    end
+    verbose_log("results_dir: #{@results_dir} parent_pid=#{@results_parent_pid}")
+  end
+
+  def self.child_results_path
+    return nil unless @results_dir
+    ts = format("%.6f", Time.now.to_f).tr(".", "_")
+    File.join(@results_dir, "child_#{Process.pid}_#{ts}.json")
+  end
+
+
+  def self.serialize_ranges_by_file(ranges_by_file)
+    return nil unless ranges_by_file
+    specs = []
+    ranges_by_file.each do |file, ranges|
+      if ranges.nil? || ranges.empty?
+        specs << file.to_s
+        next
+      end
+      segs = ranges.map do |r|
+        r.begin == r.end ? r.begin.to_s : "#{r.begin}-#{r.end}"
+      end
+      specs << "#{file}:#{segs.join(",")}"
+    end
+    specs.join(";")
+  end
+
+  def self.ensure_rubyopt_require
+    current = ENV["RUBYOPT"].to_s
+    return if current.split.any? { |t| t == "-rlumitrace" || t == "-rlumitrace/enable" }
+    updated = current.strip.empty? ? "-rlumitrace" : "#{current} -rlumitrace"
+    ENV["RUBYOPT"] = updated
+  end
+
+  def self.apply_exec_env(effective_text:, effective_html:, effective_json:, effective_max:, effective_root:, effective_verbose:, ranges_by_file:)
+    ENV["LUMITRACE_TEXT"] = effective_text == true ? "1" : effective_text == false ? "0" : effective_text.to_s
+    ENV["LUMITRACE_HTML"] = effective_html == true ? "1" : effective_html == false ? "0" : effective_html.to_s
+    ENV["LUMITRACE_JSON"] = effective_json == true ? "1" : effective_json == false ? "0" : effective_json.to_s
+    ENV["LUMITRACE_VALUES_MAX"] = effective_max.to_s if effective_max
+    ENV["LUMITRACE_ROOT"] = effective_root.to_s if effective_root
+    ENV["LUMITRACE_VERBOSE"] = effective_verbose ? "1" : "0"
+    if ranges_by_file
+      ENV["LUMITRACE_RANGE"] = serialize_ranges_by_file(ranges_by_file)
+    end
+    ENV["LUMITRACE_ENABLE"] = "1" if ENV["LUMITRACE_ENABLE"].nil?
+    ensure_rubyopt_require
   end
 
   def self.parse_range_specs(range_specs)
@@ -44,7 +151,7 @@ module Lumitrace
     ranges_by_file
   end
 
-  def self.parse_cli_options(argv, banner: nil, allow_help: false)
+  def self.parse_cli_options(argv, banner: nil, allow_help: false, order: :permute)
     require "optparse"
 
     opts = {
@@ -64,23 +171,30 @@ module Lumitrace
 
     parser = OptionParser.new do |o|
       o.banner = banner if banner
-      o.on("--root PATH") { |v| opts[:root] = v }
-      o.on("--text [PATH]") { |v| opts[:text] = v && !v.empty? ? v : true }
-      o.on("--html [PATH]") { |v| opts[:html] = v && !v.empty? ? v : true }
-      o.on("--json [PATH]") { |v| opts[:json] = v.nil? || v.empty? ? true : v }
-      o.on("--max N", Integer) { |v| opts[:max_values] = v }
-      o.on("--range SPEC") { |v| opts[:range_specs] << v }
-      o.on("--git-diff [MODE]") { |v| opts[:git_diff_mode] = v || "working" }
-      o.on("--git-diff-context N", Integer) { |v| opts[:git_diff_context] = v }
-      o.on("--git-cmd PATH") { |v| opts[:git_cmd] = v }
-      o.on("--git-diff-no-untracked") { opts[:git_diff_no_untracked] = true }
-      o.on("--verbose") { opts[:verbose] = true }
+      o.separator ""
+      o.separator "Options:"
+      o.on("-t", "--text[=PATH]", "Text output (stdout or PATH)") { |v| opts[:text] = v.nil? || v.empty? ? true : v }
+      o.on("-h", "--html[=PATH]", "HTML output (default file or PATH)") { |v| opts[:html] = v.nil? || v.empty? ? true : v }
+      o.on("-j", "--json[=PATH]", "JSON output (default file or PATH)") { |v| opts[:json] = v.nil? || v.empty? ? true : v }
+      o.on("-g", "--git-diff[=MODE]", "Diff ranges (working, staged, base:REV, range:SPEC)") { |v| opts[:git_diff_mode] = v.nil? || v.empty? ? "working" : v }
+      o.on("--max N", Integer, "Max values per expression") { |v| opts[:max_values] = v }
+      o.on("--range SPEC", "Range: FILE:1-5,10-12 (repeatable)") { |v| opts[:range_specs] << v }
+      o.on("--git-diff-context N", Integer, "Expand diff hunks by +/-N lines") { |v| opts[:git_diff_context] = v }
+      o.on("--git-cmd PATH", "Git executable for diff") { |v| opts[:git_cmd] = v }
+      o.on("--git-diff-no-untracked", "Exclude untracked files from diff") { opts[:git_diff_no_untracked] = true }
+      o.on("--root PATH", "Root directory for instrumentation") { |v| opts[:root] = v }
+      o.on("--verbose", "Verbose logs to stderr") { opts[:verbose] = true }
       if allow_help
-        o.on("-h", "--help") { opts[:help] = true }
+        o.separator ""
+        o.on("--help", "Show this help") { opts[:help] = true }
       end
     end
 
-    remaining = parser.parse(argv)
+    remaining = if order == :preserve
+      parser.order(argv)
+    else
+      parser.parse(argv)
+    end
     [opts, remaining, parser]
   end
 
@@ -151,18 +265,42 @@ module Lumitrace
       effective_max = 1
     end
 
+    if ranges_by_file.nil? && (env[:range_specs].any? || env[:git_diff_mode] || env[:git_diff_context] || env[:git_cmd] || !env[:git_diff_untracked].nil?)
+      ranges_by_file = resolve_ranges_by_file(
+        env[:range_specs],
+        git_diff_mode: env[:git_diff_mode],
+        git_diff_context: env[:git_diff_context],
+        git_cmd: env[:git_cmd],
+        git_diff_no_untracked: env[:git_diff_untracked] == false
+      )
+    end
+
     verbose_log("env: text=#{env[:text]} html=#{env[:html]} json=#{env[:json]} max_values=#{env[:max_values].inspect} root=#{env[:root].inspect}") if effective_verbose
     RecordRequire.enable(max_values: effective_max, ranges_by_file: ranges_by_file, root: effective_root)
+    resolved_root = effective_root || Dir.pwd
+    if at_exit
+      setup_results_dir
+      install_fork_hook
+      apply_exec_env(
+        effective_text: effective_text,
+        effective_html: effective_html,
+        effective_json: effective_json,
+        effective_max: effective_max,
+        effective_root: effective_root,
+        effective_verbose: effective_verbose,
+        ranges_by_file: ranges_by_file
+      )
+    end
     if ranges_by_file
       total_ranges = ranges_by_file.values.map(&:length).sum
-      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_values=#{effective_max.inspect} root=#{effective_root.inspect} ranges=#{ranges_by_file.size} total=#{total_ranges}")
+      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_values=#{effective_max.inspect} root=#{resolved_root} ranges=#{ranges_by_file.size} total=#{total_ranges}")
       ranges_by_file.keys.sort.each do |path|
         ranges = ranges_by_file[path]
         range_text = ranges.map { |r| r.begin == r.end ? r.begin.to_s : "#{r.begin}-#{r.end}" }.join(", ")
         verbose_log("ranges: #{path}: #{range_text}")
       end
     else
-      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_values=#{effective_max.inspect} root=#{effective_root.inspect} ranges=0")
+      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_values=#{effective_max.inspect} root=#{resolved_root} ranges=0")
     end
     if at_exit
       @atexit_output_root = Dir.pwd
@@ -173,13 +311,29 @@ module Lumitrace
       unless @atexit_registered
         at_exit do
           next unless RecordRequire.enabled?
+          if results_child?
+            child_path = child_results_path
+            if child_path
+              RecordInstrument.dump_json(child_path)
+              verbose_log("child json: #{child_path}")
+            end
+            next
+          end
+
+          events = RecordInstrument.events
+          events = RecordInstrument.merge_child_events(
+            events,
+            @results_dir,
+            max_values: effective_max,
+            logger: method(:verbose_log)
+          )
+
           if @atexit_json
             json_path = @atexit_json == true ? "lumitrace_recorded.json" : @atexit_json
             json_path = File.expand_path(json_path, @atexit_output_root)
-            RecordInstrument.dump_json(json_path)
+            RecordInstrument.dump_events_json(events, json_path)
             verbose_log("json: #{json_path}")
           end
-          events = RecordInstrument.events
           if @atexit_text
             text = GenerateResultedHtml.render_text_all_from_events(
               events,
@@ -205,6 +359,15 @@ module Lumitrace
             out_path = File.expand_path(out_path, @atexit_output_root)
             File.write(out_path, html)
             verbose_log("html: #{out_path}")
+          end
+          if results_parent? && @results_dir && Dir.exist?(@results_dir)
+            begin
+              require "fileutils"
+              FileUtils.rm_rf(@results_dir)
+              verbose_log("results_dir cleanup: #{@results_dir}")
+            rescue StandardError
+              nil
+            end
           end
         end
         @atexit_registered = true

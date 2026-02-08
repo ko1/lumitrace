@@ -13,6 +13,11 @@ module Lumitrace
     json_env = parse_env_flag(ENV["LUMITRACE_JSON"])
     raw_text = ENV["LUMITRACE_TEXT"]
     text_env = parse_env_flag(raw_text)
+    range_env = ENV["LUMITRACE_RANGE"]
+    git_diff_env = ENV["LUMITRACE_GIT_DIFF"]
+    git_diff_context_env = ENV["LUMITRACE_GIT_DIFF_CONTEXT"]
+    git_cmd_env = ENV["LUMITRACE_GIT_CMD"]
+    git_diff_untracked_env = parse_env_flag(ENV["LUMITRACE_GIT_DIFF_UNTRACKED"])
     max_env = ENV["LUMITRACE_VALUES_MAX"]
     root_env = ENV["LUMITRACE_ROOT"]
 
@@ -28,6 +33,13 @@ module Lumitrace
     end
 
     verbose = parse_env_flag(ENV["LUMITRACE_VERBOSE"]) == true
+    range_specs = if range_env.nil? || range_env.strip.empty?
+      []
+    else
+      range_env.split(";").map(&:strip).reject(&:empty?)
+    end
+    git_diff_context = git_diff_context_env ? git_diff_context_env.to_i : nil
+    git_diff_untracked = git_diff_untracked_env.nil? ? nil : (git_diff_untracked_env != false)
 
     {
       text: text,
@@ -35,6 +47,11 @@ module Lumitrace
       html: html,
       html_out: html_out,
       json: json,
+      range_specs: range_specs,
+      git_diff_mode: git_diff_env,
+      git_diff_context: git_diff_context,
+      git_cmd: git_cmd_env,
+      git_diff_untracked: git_diff_untracked,
       max_values: max_env,
       root: root_env,
       verbose: verbose

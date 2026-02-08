@@ -169,35 +169,35 @@ LUMITRACE_VALUES_MAX=5 ruby exe/lumitrace path/to/entry.rb
 ### Limit to specific lines
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --range path/to/entry.rb:10-20,30-35
+ruby exe/lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
 ### Diff-based ranges
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --git-diff
-ruby exe/lumitrace path/to/entry.rb --git-diff staged
-ruby exe/lumitrace path/to/entry.rb --git-diff base:HEAD~1
-ruby exe/lumitrace path/to/entry.rb --git-diff-context 5
-ruby exe/lumitrace path/to/entry.rb --git-cmd /usr/local/bin/git
+ruby exe/lumitrace -g path/to/entry.rb
+ruby exe/lumitrace --git-diff=staged path/to/entry.rb
+ruby exe/lumitrace --git-diff=base:HEAD~1 path/to/entry.rb
+ruby exe/lumitrace --git-diff-context 5 path/to/entry.rb
+ruby exe/lumitrace --git-cmd /usr/local/bin/git path/to/entry.rb
 ```
 
 Exclude untracked files:
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --git-diff --git-diff-no-untracked
+ruby exe/lumitrace -g --git-diff-no-untracked path/to/entry.rb
 ```
 
 ### Verbose logs
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --verbose
+ruby exe/lumitrace --verbose path/to/entry.rb
 ```
 
 ### Write JSON too
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --json
+ruby exe/lumitrace -j path/to/entry.rb
 ```
 
 This creates `lumitrace_recorded.json`. HTML is written only when `--html` is also specified.
@@ -205,19 +205,38 @@ This creates `lumitrace_recorded.json`. HTML is written only when `--html` is al
 ### Text output to stdout
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --text
+ruby exe/lumitrace -t path/to/entry.rb
 ```
 
 ### Text output to a file
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --text /tmp/lumi.txt
+ruby exe/lumitrace --text=/tmp/lumi.txt path/to/entry.rb
 ```
 
 ### Text plus HTML
 
 ```bash
-ruby exe/lumitrace path/to/entry.rb --text --html
+ruby exe/lumitrace -t -h path/to/entry.rb
+```
+
+### Running with exec
+
+```bash
+ruby exe/lumitrace --html=sample/lumitrace_rake.html exec rake
+```
+
+HTML output:
+- [lumitrace_rake.html](https://ko1.github.io/lumitrace/sample/lumitrace_rake.html)
+
+### Fork/exec merge
+
+Fork/exec results are merged by default. The parent process writes final output; child processes only write fragments under `LUMITRACE_RESULTS_DIR`.
+
+You can pass ranges via env (semicolon-separated):
+
+```bash
+LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
 ```
 
 ## 2. Library Mode
@@ -280,9 +299,11 @@ require "lumitrace"
 You can also pass CLI-style options via `LUMITRACE_ENABLE`:
 
 ```ruby
-ENV["LUMITRACE_ENABLE"] = "--text --html /tmp/lumi.html --json"
+ENV["LUMITRACE_ENABLE"] = "-t --html=/tmp/lumi.html -j"
 require "lumitrace"
 ```
+
+Lumitrace also sets `RUBYOPT=-rlumitrace` to ensure exec'd Ruby processes load it, so fork/exec output can be merged.
 
 ### Change output paths
 
