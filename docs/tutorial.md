@@ -16,9 +16,18 @@ lumitrace sample/sample.rb
 The program’s own stdout is still printed, and Lumitrace text output follows it.
 
 Text output format:
-- Each file header is `### path/to/file.rb`.
-- Each line is prefixed with a line number like ` 12| `.
-- Skipped ranges are shown as a line containing `...`.
+- Each file header is shown like:
+  ```
+  ### path/to/file.rb
+  ```
+- Each line is prefixed with a line number like:
+  ```
+   12| 
+  ```
+- Skipped ranges are shown as:
+  ```
+  ...
+  ```
 - The last value is shown as `#=> ...` (with `(3rd run)` when run multiple times).
 
 Example output (stdout):
