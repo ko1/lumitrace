@@ -7,6 +7,8 @@ This is a short, practical guide to using Lumitrace.
 
 ## 1. Quick Start (CLI)
 
+Start here to see what Lumitrace does in one command and what the default text output looks like.
+
 Run the bundled sample with the simplest command (text output goes to stdout by default):
 
 ```bash
@@ -104,6 +106,8 @@ n0=2, n1=5, n2=11
 
 ### Save outputs to files
 
+Use this when you want to keep results for review or share them; it writes text and HTML outputs to disk.
+
 Run the bundled sample and write both text and HTML outputs:
 
 ```bash
@@ -120,6 +124,8 @@ View the HTML output:
 - [lumitrace_results_01.html](https://ko1.github.io/lumitrace/sample/lumitrace_results_01.html)
 
 ### Range example
+
+When a full run is too noisy, narrow the scope to specific line ranges so you can focus on the slice you care about.
 
 Run with ranges and save separate outputs:
 
@@ -171,17 +177,23 @@ LUMITRACE_HTML=/tmp/out.html lumitrace path/to/entry.rb
 
 ### Limit recorded values
 
+If the output is too long or slow to scan, cap how many values per line are recorded.
+
 ```bash
 LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
 ```
 
 ### Limit to specific lines
 
+Use `--range` when you want precise control over which lines are traced.
+
 ```bash
 lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
 ### Diff-based ranges
+
+Let Git choose the interesting lines by tracing only changes from `git diff`; this keeps review noise low.
 
 ```bash
 lumitrace -g path/to/entry.rb
@@ -199,11 +211,15 @@ lumitrace -g --git-diff-no-untracked path/to/entry.rb
 
 ### Verbose logs
 
+Turn this on when you need to understand how ranges were computed or why a line was (not) recorded.
+
 ```bash
 lumitrace --verbose path/to/entry.rb
 ```
 
 ### Write JSON too
+
+Use JSON output when you want to post-process results with scripts or other tools.
 
 ```bash
 lumitrace -j path/to/entry.rb
@@ -213,11 +229,15 @@ This creates `lumitrace_recorded.json`. HTML is written only when `--html` is al
 
 ### Text output to stdout
 
+Choose this for quick, interactive feedback in your terminal.
+
 ```bash
 lumitrace -t path/to/entry.rb
 ```
 
 ### Text output to a file
+
+Send text output to a file when you want to archive results or attach them to CI artifacts.
 
 ```bash
 lumitrace --text=/tmp/lumi.txt path/to/entry.rb
@@ -225,11 +245,15 @@ lumitrace --text=/tmp/lumi.txt path/to/entry.rb
 
 ### Text plus HTML
 
+Get both the fast terminal view and the richer HTML report in one run.
+
 ```bash
 lumitrace -t -h path/to/entry.rb
 ```
 
 ### Running with exec
+
+Wrap another command (like tests) so Lumitrace instruments what that command runs.
 
 ```bash
 lumitrace --html=sample/lumitrace_rake.html exec rake
@@ -238,7 +262,15 @@ lumitrace --html=sample/lumitrace_rake.html exec rake
 HTML output:
 - [lumitrace_rake.html](https://ko1.github.io/lumitrace/sample/lumitrace_rake.html)
 
+### GitHub Actions
+
+Use CI to publish diff-scoped results automatically and share the HTML report via GitHub Pages.
+
+For a practical CI setup (including `LUMITRACE_GIT_DIFF` and Pages upload), see `sample/sample_project/README.md`. The published Pages example is here: [https://ko1.github.io/lumitrace_sample_project/](https://ko1.github.io/lumitrace_sample_project/).
+
 ### Fork/exec merge
+
+If your app forks or execs, this explains how Lumitrace merges results across processes.
 
 Fork/exec results are merged by default. The parent process writes final output; child processes only write fragments under `LUMITRACE_RESULTS_DIR`.
 
@@ -249,6 +281,8 @@ LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
 ```
 
 ## 2. Library Mode
+
+Use this when you want to enable Lumitrace inside an app or script without relying on the CLI wrapper.
 
 Enable instrumentation and text output at exit:
 
@@ -316,6 +350,8 @@ Lumitrace also sets `RUBYOPT=-rlumitrace` to ensure exec'd Ruby processes load i
 
 ### Change output paths
 
+Customize where HTML/JSON/text outputs go when using library mode.
+
 ```bash
 LUMITRACE_HTML=/tmp/lumi.html ruby your_script.rb
 ```
@@ -328,6 +364,8 @@ Lumitrace.enable!(json: "/tmp/lumi.json")
 ```
 
 ## 3. Diff-Based Instrumentation
+
+Focus on just the changed lines in your codebase by wiring Lumitrace to `git diff` in library mode.
 
 Enable only lines touched by `git diff` for the current program file:
 
@@ -343,11 +381,15 @@ LUMITRACE_GIT_DIFF=staged ruby your_script.rb
 
 ### Expand the diff context
 
+Widen the diff window to include surrounding lines for better context.
+
 ```bash
 LUMITRACE_GIT_DIFF_CONTEXT=5 ruby your_script.rb
 ```
 
 ## 4. Root Scope
+
+Limit (or expand) which files are eligible for instrumentation by defining a root directory.
 
 By default, Lumitrace only instruments files under the current directory.
 Override the root with:
@@ -363,6 +405,8 @@ lumitrace --root /path/to/project your_script.rb
 ```
 
 ## 5. Tips
+
+Small knobs that keep outputs readable and noise low in day-to-day use.
 
 - If your output is large, lower `LUMITRACE_VALUES_MAX`.
 - For quick checks on a single file, `enable_git_diff` keeps noise down.

@@ -7,6 +7,8 @@
 
 ## 1. クイックスタート（CLI）
 
+まずは最小のコマンドで動かして、出力形式の雰囲気を掴みます。
+
 同梱の sample を最小のコマンドで実行します（テキストは stdout に出ます）:
 
 ```bash
@@ -104,6 +106,8 @@ n0=2, n1=5, n2=11
 
 ### ファイルに保存
 
+結果をあとで見返したり共有したいときは、ファイル保存が便利です。
+
 同梱の sample を実行して、テキストと HTML を保存します:
 
 ```bash
@@ -120,6 +124,8 @@ HTML 出力を見る:
 - [lumitrace_results_01.html](https://ko1.github.io/lumitrace/sample/lumitrace_results_01.html)
 
 ### 範囲指定の例
+
+出力が多いときは、対象行を絞って読みやすくします。
 
 範囲を指定して、別の出力として保存します:
 
@@ -171,17 +177,23 @@ LUMITRACE_HTML=/tmp/out.html lumitrace path/to/entry.rb
 
 ### 記録する値の数を減らす
 
+長い出力を短くしたいときに使います。
+
 ```bash
 LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
 ```
 
 ### 行範囲を限定する
 
+特定の行だけを明示的に追いたいときの指定です。
+
 ```bash
 lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
 ### 差分だけ計測（CLI）
+
+変更行だけを自動で追うと、レビュー時のノイズが減ります。
 
 ```bash
 lumitrace -g path/to/entry.rb
@@ -199,11 +211,15 @@ lumitrace -g --git-diff-no-untracked path/to/entry.rb
 
 ### 詳細ログ
 
+レンジ計算や動作の理由を追いたいときに有効です。
+
 ```bash
 lumitrace --verbose path/to/entry.rb
 ```
 
 ### JSON も出力する
+
+ツール連携や後処理のために JSON を出します。
 
 ```bash
 lumitrace -j path/to/entry.rb
@@ -213,11 +229,15 @@ lumitrace -j path/to/entry.rb
 
 ### stdout にテキスト出力
 
+端末でさっと確認したいとき向けです。
+
 ```bash
 lumitrace -t path/to/entry.rb
 ```
 
 ### テキストをファイルに出力
+
+CI アーティファクトなどに残したいときに便利です。
 
 ```bash
 lumitrace --text=/tmp/lumi.txt path/to/entry.rb
@@ -225,11 +245,15 @@ lumitrace --text=/tmp/lumi.txt path/to/entry.rb
 
 ### テキストと HTML を両方出力
 
+素早い確認と詳細閲覧を一回で得たいときに使います。
+
 ```bash
 lumitrace -t -h path/to/entry.rb
 ```
 
 ### exec で実行
+
+テストなど別コマンドをラップして計測します。
 
 ```bash
 lumitrace --html=sample/lumitrace_rake.html exec rake
@@ -238,7 +262,16 @@ lumitrace --html=sample/lumitrace_rake.html exec rake
 HTML 出力:
 - [lumitrace_rake.html](https://ko1.github.io/lumitrace/sample/lumitrace_rake.html)
 
+### GitHub Actions
+
+CI で差分ログを出し、Pages で HTML を共有したいときの導線です。
+
+GitHub Actions への追加手順（`LUMITRACE_GIT_DIFF` や Pages へのアップロード設定を含む）は `sample/sample_project/README.md` を参照してください。公開済み Pages はこちらです:
+[https://ko1.github.io/lumitrace_sample_project/](https://ko1.github.io/lumitrace_sample_project/)
+
 ### Fork/exec のマージ
+
+プロセスが増える構成のとき、結果がどう合流するかを押さえます。
 
 fork/exec の結果はデフォルトでマージされます。親プロセスが最終出力を行い、子プロセスは `LUMITRACE_RESULTS_DIR` に断片 JSON を保存します。
 
@@ -249,6 +282,8 @@ LUMITRACE_RANGE="a.rb:1-3,5-6;b.rb" ruby your_script.rb
 ```
 
 ## 2. ライブラリとして使う
+
+CLI を使わずアプリに組み込みたい場合はここから始めます。
 
 終了時にテキストを出力する設定:
 
@@ -316,6 +351,8 @@ exec 先でも読み込まれるように、Lumitrace は `RUBYOPT=-rlumitrace` 
 
 ### 出力先を変更する
 
+用途に合わせて HTML/JSON の保存先を変えられます。
+
 ```bash
 LUMITRACE_HTML=/tmp/lumi.html ruby your_script.rb
 ```
@@ -328,6 +365,8 @@ Lumitrace.enable!(json: "/tmp/lumi.json")
 ```
 
 ## 3. 差分だけ計測（git diff）
+
+ライブラリ側で `git diff` に連動させ、変更行だけを追う方法です。
 
 現在のプログラムファイルに対する `git diff` の範囲だけを有効化します。
 
@@ -343,11 +382,15 @@ LUMITRACE_GIT_DIFF=staged ruby your_script.rb
 
 ### 差分前後の行数を広げる
 
+前後の文脈も含めたいときに範囲を広げます。
+
 ```bash
 LUMITRACE_GIT_DIFF_CONTEXT=5 ruby your_script.rb
 ```
 
 ## 4. ルート範囲
+
+計測対象のディレクトリ範囲を明確にしたいときに使います。
 
 デフォルトは現在のディレクトリ配下のみ計測します。
 別のルートを指定したい場合:
@@ -363,6 +406,8 @@ lumitrace --root /path/to/project your_script.rb
 ```
 
 ## 5. Tips
+
+日常的に効く小さなコツをまとめます。
 
 - 出力が大きい場合は `LUMITRACE_VALUES_MAX` を下げると軽くなります。
 - 1 ファイルだけの確認は `enable_git_diff` が便利です。
