@@ -198,15 +198,20 @@ module RecordInstrument
   def self.expr_record(id, value)
     entry = @events_by_id[id]
     unless entry
-      entry = [[], 0]
+      max = @max_values_per_expr
+      entry = Array.new(max + 2)
+      entry[max] = 1
+      entry[max + 1] = 1
+      entry[0] = value
       @events_by_id[id] = entry
+      return value
     end
-    values = entry[0]
-    entry[1] += 1
-    values << value
-    if values.length > @max_values_per_expr
-      values.shift(values.length - @max_values_per_expr)
-    end
+
+    max = entry.length - 2
+    idx = entry[max]
+    entry[idx] = value
+    entry[max] = (idx + 1) % max
+    entry[max + 1] += 1
     value
   end
 
@@ -222,9 +227,25 @@ module RecordInstrument
         start_col: loc[:start_col],
         end_line: loc[:end_line],
         end_col: loc[:end_col],
-        values: e[0].map { |v| safe_value(v) },
-        total: e[1]
+        values: values_from_ring(e).map { |v| safe_value(v) },
+        total: e[e.length - 1]
       }
+    end
+    out
+  end
+
+  def self.values_from_ring(entry)
+    max = entry.length - 2
+    idx = entry[max]
+    total = entry[max + 1]
+    len = total < max ? total : max
+    return [] if len == 0
+
+    start = idx - len
+    start += max if start < 0
+    out = []
+    len.times do |i|
+      out << entry[(start + i) % max]
     end
     out
   end
