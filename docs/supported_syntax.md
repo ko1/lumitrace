@@ -21,6 +21,11 @@ positions:
     ```ruby
     foo(bar)
     ```
+- `yield` expressions (`Prism::YieldNode`)
+  - Example:
+    ```ruby
+    yield value
+    ```
 - Local variable reads (`Prism::LocalVariableReadNode`)
   - Example:
     ```ruby

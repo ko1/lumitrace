@@ -716,6 +716,7 @@ module GenerateResultedHtml
     ranges = normalize_ranges(ranges)
     target_events = events.select { |e| e[:file] == filename }
     term_width = tty ? terminal_width : nil
+    def_lines = RecordInstrument.definition_lines_from_source(source, ranges)
 
     expected_by_line = Hash.new(0)
     RecordInstrument.collect_locations_from_source(source, ranges).each do |loc|
@@ -749,14 +750,15 @@ module GenerateResultedHtml
     ln_width = total_lines.to_s.length
     prefix_for = ->(n, missing) { "#{missing ? "!" : " "}#{format("%#{ln_width}d| ", n)}" }
 
-    raw_lines = source.lines.each_with_index.map do |line, idx|
+    raw_lines = source.lines.each_with_index.flat_map do |line, idx|
       lineno = idx + 1
       next if ranges && !line_in_ranges?(lineno, ranges)
       line_text = line.chomp
       evs = aggregate_events_for_line(target_events, lineno, line_text.length)
-      comment_value = comment_value_with_total_for_line(evs)
+      def_info = def_lines[lineno]
+      comment_value = def_info && !def_info[:endless] ? nil : comment_value_with_total_for_line(evs)
       missing = expected_by_line[lineno] > 0 && executed_by_line[lineno] == 0
-      { lineno: lineno, text: line_text, comment: comment_value, prefix: prefix_for.call(lineno, missing) }
+      [{ lineno: lineno, text: line_text, comment: comment_value, prefix: prefix_for.call(lineno, missing) }]
     end.compact
 
     group = []

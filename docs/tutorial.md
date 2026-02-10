@@ -127,6 +127,7 @@ View the HTML output:
 
 HTML notes:
 - Executed expressions show `🔎`; unexecuted expressions show `∅`.
+- Argument values show `🧷` in HTML.
 - Lines where all instrumentable expressions are unexecuted are shaded light red; mixed lines only shade the unexecuted expressions.
 - When ranges are used, skipped sections are shown as `...` in the line-number column.
 
@@ -259,6 +260,7 @@ Send text output to a file when you want to archive results or attach them to CI
 ```bash
 lumitrace --text=/tmp/lumi.txt path/to/entry.rb
 ```
+
 
 ### Text plus HTML
 

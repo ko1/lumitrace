@@ -54,6 +54,7 @@ module RecordInstrument
 
   WRAP_NODE_CLASSES = [
     Prism::CallNode,
+    Prism::YieldNode,
     Prism::LocalVariableReadNode,
     Prism::ItLocalVariableReadNode,
     Prism::ConstantReadNode,
@@ -91,6 +92,7 @@ module RecordInstrument
     end
 
     locs = []
+    seen_args = {}
     stack = [[parse.value, nil]]
     until stack.empty?
       node, parent = stack.pop
@@ -104,7 +106,14 @@ module RecordInstrument
       end
 
       arg_locs = arg_locations_for_node(node, ranges)
-      locs.concat(arg_locs) if arg_locs && !arg_locs.empty?
+      if arg_locs && !arg_locs.empty?
+        arg_locs.each do |loc|
+          key = [loc[:start_line], loc[:start_col], loc[:end_line], loc[:end_col], loc[:name]]
+          next if seen_args[key]
+          seen_args[key] = true
+          locs << loc
+        end
+      end
 
       node.child_nodes.each { |child| stack << [child, node] }
     end
@@ -127,7 +136,7 @@ module RecordInstrument
       node, parent = stack.pop
       next unless node
 
-      arg_insert = arg_insert_for_node(node, ranges, file_label, record_method)
+      arg_insert = arg_insert_for_node(node, ranges, file_label, record_method, src)
       inserts << arg_insert if arg_insert
 
       if node.respond_to?(:location)
@@ -393,7 +402,32 @@ module RecordInstrument
     end
   end
 
+  def self.definition_lines_from_source(src, ranges)
+    ranges = normalize_ranges(ranges || [])
+    parse = Prism.parse(src)
+    if parse.errors.any?
+      raise "parse errors: #{parse.errors.map(&:message).join(", ") }"
+    end
+
+    lines = {}
+    stack = [parse.value]
+    until stack.empty?
+      node = stack.pop
+      next unless node
+      if node.is_a?(Prism::DefNode) && node.location
+        line = node.location.start_line
+        if in_ranges?(line, ranges)
+          lines[line] = { endless: endless_def?(node) }
+        end
+      end
+      node.child_nodes.each { |child| stack << child }
+    end
+    lines
+  end
+
   def self.arg_locations_for_node(node, ranges)
+    return [] unless node.is_a?(Prism::DefNode) || node.is_a?(Prism::BlockNode)
+    return [] if endless_def?(node)
     params = parameters_for_node(node)
     return [] unless params
     arg_nodes = param_nodes_from(params)
@@ -419,13 +453,19 @@ module RecordInstrument
     end
   end
 
-  def self.arg_insert_for_node(node, ranges, file_label, record_method)
+  def self.arg_insert_for_node(node, ranges, file_label, record_method, src)
+    return nil unless node.is_a?(Prism::DefNode) || node.is_a?(Prism::BlockNode)
+    return nil if endless_def?(node)
     params = parameters_for_node(node)
     return nil unless params
     arg_nodes = param_nodes_from(params)
     return nil if arg_nodes.empty?
     body_offset = body_start_offset(node)
-    return nil unless body_offset
+    used_fallback = false
+    unless body_offset
+      body_offset = arg_fallback_offset(node, params, src)
+      used_fallback = true
+    end
 
     records = []
     arg_nodes.each do |pnode|
@@ -446,12 +486,32 @@ module RecordInstrument
       records << "#{record_method}(#{id}, (#{name}))"
     end
     return nil if records.empty?
-    text = records.join("; ") + "; "
+    prefix = used_fallback ? "; " : ""
+    text = prefix + records.join("; ") + "; "
     { pos: body_offset, text: text, kind: :arg, len: 0 }
   end
 
+  def self.arg_fallback_offset(node, params, src)
+    if params.respond_to?(:location) && params.location
+      pos = params.location.end_offset
+      if node.is_a?(Prism::DefNode) && src
+        pos += 1 if src.getbyte(pos) == ")".ord
+      end
+      return pos
+    end
+    if node.respond_to?(:opening_loc) && node.opening_loc
+      return node.opening_loc.end_offset
+    end
+    nil
+  end
+
+  def self.endless_def?(node)
+    return false unless node.is_a?(Prism::DefNode)
+    node.respond_to?(:equal_loc) && node.equal_loc
+  end
+
   def self.parameters_for_node(node)
-    return node.parameters if node.respond_to?(:parameters)
+    return node.parameters if node.is_a?(Prism::DefNode) || node.is_a?(Prism::BlockNode)
     nil
   end
 

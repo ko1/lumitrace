@@ -129,6 +129,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 ### Wrap Targets
 
 - `CallNode` (except those with block bodies)
+- `YieldNode`
 - Variable reads:
   - `LocalVariableReadNode`
   - `ConstantReadNode`
@@ -136,6 +137,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   - `ClassVariableReadNode`
   - `GlobalVariableReadNode`
 - Literal nodes are excluded (e.g. integer, string, true/false, nil, etc.)
+- Method and block arguments are recorded by inserting `Lumitrace::R` at the start of the body.
 
 ## Recording
 
@@ -145,6 +147,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 - Track `total` count for how many times the expression executed.
 - Values are stored via `inspect` for non-primitive types.
 - String values are rendered via `inspect` and then truncated to 1000 bytes.
+- Argument records are stored alongside expression records with `kind: "arg"` and `name` (argument name).
 
 ## Fork/Exec Merge
 
@@ -165,6 +168,8 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   "start_col": 4,
   "end_line": 10,
   "end_col": 20,
+  "kind": "expr",
+  "name": null,
   "values": ["..."],
   "total": 123
 }
