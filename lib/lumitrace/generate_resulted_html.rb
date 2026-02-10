@@ -82,6 +82,7 @@ module GenerateResultedHtml
           .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
           .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
           .marker.miss { color: #c07070; }
+          .marker.arg { color: #2f6f8e; }
           .marker .tooltip {
             display: none;
             position: absolute;
@@ -144,15 +145,33 @@ module GenerateResultedHtml
 
       values = e[:values]
       total = e[:total]
-      value_text = total.to_i == 0 ? "(not hit)" : summarize_values(values, total)
+      label = if e[:kind].to_s == "arg" && e[:name]
+        "arg #{e[:name]}"
+      else
+        nil
+      end
+      value_text = if total.to_i == 0
+        label ? "#{label}: (not hit)" : "(not hit)"
+      else
+        summary = summarize_values(values, total)
+        label ? "#{label}: #{summary}" : summary
+      end
       tooltip_html = esc(value_text)
       depth_class = "depth-#{e[:depth]}"
       miss_class = total.to_i == 0 && !e[:suppress_miss] ? " miss" : ""
       key_attr = esc(e[:key_id])
       open_tag = "<span class=\"expr hit #{depth_class}#{miss_class}\" data-key=\"#{key_attr}\">"
       if e.fetch(:marker, true)
-        marker = total.to_i == 0 ? "∅" : "🔎"
-        marker_class = total.to_i == 0 && !e[:suppress_miss] ? "marker miss" : "marker"
+        marker = if total.to_i == 0
+          "∅"
+        elsif e[:kind].to_s == "arg"
+          "🧷"
+        else
+          "🔎"
+        end
+        marker_class = "marker"
+        marker_class = "marker miss" if total.to_i == 0 && !e[:suppress_miss]
+        marker_class = "#{marker_class} arg" if e[:kind].to_s == "arg"
         close_tag = "<span class=\"#{marker_class}\" data-key=\"#{key_attr}\" aria-hidden=\"true\">#{marker}<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
       else
         close_tag = "</span>"
@@ -216,7 +235,7 @@ module GenerateResultedHtml
   def self.best_event_for_line(events)
     return nil if events.empty?
 
-    candidates = events.select { |e| e[:marker] }
+    candidates = events.select { |e| e[:marker] && e[:kind].to_s != "arg" }
     return nil if candidates.empty?
 
     candidates.max_by do |e|
@@ -278,6 +297,8 @@ module GenerateResultedHtml
         start_col: s,
         end_col: t,
         marker: marker,
+        kind: e[:kind],
+        name: e[:name],
         values: e[:values],
         total: e[:total]
       }
@@ -312,6 +333,8 @@ module GenerateResultedHtml
         end_line.to_i,
         end_col.to_i
       ]
+      kind = e["kind"] || e[:kind] || "expr"
+      name = e["name"] || e[:name]
       entry = (merged[key] ||= {
         key: key,
         file: key[0],
@@ -319,6 +342,8 @@ module GenerateResultedHtml
         start_col: key[2],
         end_line: key[3],
         end_col: key[4],
+        kind: kind,
+        name: name,
         values: [],
         total: 0
       })
@@ -363,21 +388,23 @@ module GenerateResultedHtml
       key = [e[:file], e[:start_line], e[:start_col], e[:end_line], e[:end_col]]
       existing[key] = true
     end
-    expected.each do |loc|
-      key = [filename, loc[:start_line], loc[:start_col], loc[:end_line], loc[:end_col]]
-      next if existing[key]
-      events << {
-        key: key,
-        file: key[0],
-        start_line: key[1],
-        start_col: key[2],
-        end_line: key[3],
-        end_col: key[4],
-        values: [],
-        total: 0
-      }
-      existing[key] = true
-    end
+      expected.each do |loc|
+        key = [filename, loc[:start_line], loc[:start_col], loc[:end_line], loc[:end_col]]
+        next if existing[key]
+        events << {
+          key: key,
+          file: key[0],
+          start_line: key[1],
+          start_col: key[2],
+          end_line: key[3],
+          end_col: key[4],
+          kind: loc[:kind],
+          name: loc[:name],
+          values: [],
+          total: 0
+        }
+        existing[key] = true
+      end
     events
   end
 
@@ -500,6 +527,7 @@ module GenerateResultedHtml
           .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
           .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
           .marker.miss { color: #c07070; }
+          .marker.arg { color: #2f6f8e; }
           .marker .tooltip {
             display: none;
             position: absolute;
@@ -624,6 +652,7 @@ module GenerateResultedHtml
           .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
           .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
           .marker.miss { color: #c07070; }
+          .marker.arg { color: #2f6f8e; }
           .marker .tooltip {
             display: none;
             position: absolute;

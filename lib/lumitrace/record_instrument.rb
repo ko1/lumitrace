@@ -14,7 +14,7 @@ module Lumitrace
     else
       max = RecordInstrument.max_values_per_expr
       entry = Array.new(max + 2)
-      entry[max] = 1
+      entry[max] = max == 1 ? 0 : 1
       entry[max + 1] = 1
       entry[0] = value
       events_by_id[id] = entry
@@ -99,9 +99,12 @@ module RecordInstrument
       if node.respond_to?(:location)
         line = node.location.start_line
         if in_ranges?(line, ranges) && wrap_expr?(node, parent)
-          locs << expr_location(node)
+          locs << expr_location(node).merge(kind: :expr)
         end
       end
+
+      arg_locs = arg_locations_for_node(node, ranges)
+      locs.concat(arg_locs) if arg_locs && !arg_locs.empty?
 
       node.child_nodes.each { |child| stack << [child, node] }
     end
@@ -124,11 +127,14 @@ module RecordInstrument
       node, parent = stack.pop
       next unless node
 
+      arg_insert = arg_insert_for_node(node, ranges, file_label, record_method)
+      inserts << arg_insert if arg_insert
+
       if node.respond_to?(:location)
         line = node.location.start_line
         if in_ranges?(line, ranges) && wrap_expr?(node, parent)
           loc = expr_location(node)
-          id = register_location(file_label, loc)
+          id = register_location(file_label, loc, kind: :expr)
           prefix = "#{record_method}(#{id}, ("
           suffix = "))"
           span_len = loc[:end_offset] - loc[:start_offset]
@@ -158,7 +164,7 @@ module RecordInstrument
 
   def self.apply_insertions(src, inserts)
     out = src.dup.b
-    kind_order = { open: 0, close: 1 }
+    kind_order = { open: 0, close: 1, arg: 2 }
     inserts.sort_by do |i|
       [
         -i[:pos],
@@ -246,7 +252,7 @@ module RecordInstrument
     @events_by_id
   end
 
-  def self.register_location(file, loc)
+  def self.register_location(file, loc, kind: :expr, name: nil)
     @next_id += 1
     id = @next_id
     @loc_by_id[id] = {
@@ -254,7 +260,9 @@ module RecordInstrument
       start_line: loc[:start_line],
       start_col: loc[:start_col],
       end_line: loc[:end_line],
-      end_col: loc[:end_col]
+      end_col: loc[:end_col],
+      kind: kind,
+      name: name
     }
     id
   end
@@ -271,6 +279,8 @@ module RecordInstrument
         start_col: loc[:start_col],
         end_line: loc[:end_line],
         end_col: loc[:end_col],
+        kind: loc[:kind].to_s,
+        name: loc[:name],
         values: values_from_ring(e).map { |v| safe_value(v) },
         total: e[e.length - 1]
       }
@@ -318,6 +328,8 @@ module RecordInstrument
       start_col = e[:start_col] || e["start_col"]
       end_line = e[:end_line] || e["end_line"]
       end_col = e[:end_col] || e["end_col"]
+      kind = e[:kind] || e["kind"]
+      name = e[:name] || e["name"]
       values = e[:values] || e["values"] || []
       total = e[:total] || e["total"] || 0
 
@@ -328,6 +340,8 @@ module RecordInstrument
         start_col: start_col,
         end_line: end_line,
         end_col: end_col,
+        kind: kind,
+        name: name,
         values: [],
         total: 0
       })
@@ -377,6 +391,125 @@ module RecordInstrument
       s = v.inspect
       s.bytesize > 1000 ? s[0, 1000] + "..." : s
     end
+  end
+
+  def self.arg_locations_for_node(node, ranges)
+    params = parameters_for_node(node)
+    return [] unless params
+    arg_nodes = param_nodes_from(params)
+    return [] if arg_nodes.empty?
+
+    arg_nodes.each_with_object([]) do |pnode, out|
+      next unless pnode.respond_to?(:location)
+      name = param_name(pnode)
+      next unless name
+      loc = pnode.location
+      line = loc.start_line
+      next unless in_ranges?(line, ranges)
+      out << {
+        start_offset: loc.start_offset,
+        end_offset: loc.start_offset + loc.length,
+        start_line: loc.start_line,
+        start_col: loc.start_column,
+        end_line: loc.end_line,
+        end_col: loc.end_column,
+        kind: :arg,
+        name: name
+      }
+    end
+  end
+
+  def self.arg_insert_for_node(node, ranges, file_label, record_method)
+    params = parameters_for_node(node)
+    return nil unless params
+    arg_nodes = param_nodes_from(params)
+    return nil if arg_nodes.empty?
+    body_offset = body_start_offset(node)
+    return nil unless body_offset
+
+    records = []
+    arg_nodes.each do |pnode|
+      name = param_name(pnode)
+      next unless name
+      loc = pnode.location
+      next unless loc
+      line = loc.start_line
+      next unless in_ranges?(line, ranges)
+      id = register_location(file_label, {
+        start_offset: loc.start_offset,
+        end_offset: loc.start_offset + loc.length,
+        start_line: loc.start_line,
+        start_col: loc.start_column,
+        end_line: loc.end_line,
+        end_col: loc.end_column
+      }, kind: :arg, name: name)
+      records << "#{record_method}(#{id}, (#{name}))"
+    end
+    return nil if records.empty?
+    text = records.join("; ") + "; "
+    { pos: body_offset, text: text, kind: :arg, len: 0 }
+  end
+
+  def self.parameters_for_node(node)
+    return node.parameters if node.respond_to?(:parameters)
+    nil
+  end
+
+  def self.body_start_offset(node)
+    body = if node.respond_to?(:body)
+      node.body
+    else
+      nil
+    end
+    return nil unless body && body.respond_to?(:location)
+    if body.respond_to?(:statements) && body.statements&.body&.first&.location
+      body.statements.body.first.location.start_offset
+    else
+      body.location.start_offset
+    end
+  end
+
+  def self.param_nodes_from(params)
+    nodes = []
+    params.child_nodes.each do |child|
+      nodes.concat(extract_param_nodes(child))
+    end
+    nodes
+  end
+
+  def self.extract_param_nodes(node)
+    return [] unless node
+    if node.respond_to?(:name)
+      return [node]
+    end
+    if node.respond_to?(:parameters)
+      return extract_param_nodes(node.parameters)
+    end
+    if node.respond_to?(:requireds)
+      nodes = []
+      nodes.concat(node.requireds) if node.requireds
+      nodes.concat(node.optionals) if node.respond_to?(:optionals) && node.optionals
+      nodes << node.rest if node.respond_to?(:rest) && node.rest
+      nodes.concat(node.posts) if node.respond_to?(:posts) && node.posts
+      nodes.concat(node.keywords) if node.respond_to?(:keywords) && node.keywords
+      nodes << node.keyword_rest if node.respond_to?(:keyword_rest) && node.keyword_rest
+      nodes << node.block if node.respond_to?(:block) && node.block
+      return nodes.flat_map { |n| extract_param_nodes(n) }
+    end
+    if node.respond_to?(:target)
+      return extract_param_nodes(node.target)
+    end
+    if node.respond_to?(:targets)
+      return node.targets.flat_map { |t| extract_param_nodes(t) }
+    end
+    []
+  end
+
+  def self.param_name(node)
+    return nil unless node.respond_to?(:name)
+    name = node.name
+    return nil if name.nil? || name == ""
+    name.to_s
   end
 end
 end
