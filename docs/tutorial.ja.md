@@ -106,7 +106,7 @@ n0=2, n1=5, n2=11
 
 ### ファイルに保存
 
-結果をあとで見返したり共有したいときは、ファイル保存が便利です。
+結果をあとで見返したり共有したいときは、テキストと HTML をディスクに書き出すのが便利です。
 
 同梱の sample を実行して、テキストと HTML を保存します:
 
@@ -177,7 +177,7 @@ LUMITRACE_HTML=/tmp/out.html lumitrace path/to/entry.rb
 
 ### 記録する値の数を減らす
 
-長い出力を短くしたいときに使います。
+出力が長すぎたり読みづらいときに、1 行あたりの記録数を制限します。
 
 ```bash
 LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
@@ -347,11 +347,11 @@ ENV["LUMITRACE_ENABLE"] = "-t --html=/tmp/lumi.html -j"
 require "lumitrace"
 ```
 
-exec 先でも読み込まれるように、Lumitrace は `RUBYOPT=-rlumitrace` を設定します。
+exec 先でも読み込まれるように、Lumitrace は `RUBYOPT=-rlumitrace` を設定します。これにより fork/exec の結果をマージできます。
 
 ### 出力先を変更する
 
-用途に合わせて HTML/JSON の保存先を変えられます。
+用途に合わせて HTML/JSON/テキストの保存先を変えられます。
 
 ```bash
 LUMITRACE_HTML=/tmp/lumi.html ruby your_script.rb
