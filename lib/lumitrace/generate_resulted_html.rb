@@ -1,4 +1,5 @@
 require "json"
+require_relative "record_instrument"
 
 module Lumitrace
 module GenerateResultedHtml
@@ -12,23 +13,47 @@ module GenerateResultedHtml
 
     raw_events = JSON.parse(File.read(events_path))
     events = normalize_events(raw_events)
+    events = add_missing_events(events, File.read(source_path), source_path, ranges)
 
-    src_lines = File.read(source_path).lines
+    src = File.read(source_path)
+    src_lines = src.lines
     ranges = normalize_ranges(ranges)
+    expected_by_line, executed_by_line = line_stats(src, ranges, events, source_path)
 
-    html_lines = src_lines.each_with_index.map do |line, idx|
+    html_lines = []
+    prev_lineno = nil
+    first_lineno = nil
+    last_lineno = nil
+    src_lines.each_with_index do |line, idx|
       lineno = idx + 1
       next if ranges && !line_in_ranges?(lineno, ranges)
+      first_lineno ||= lineno
+      if prev_lineno && lineno > prev_lineno + 1
+        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
+      end
       line_text = line.chomp
       evs = aggregate_events_for_line(events, lineno, line_text.length)
-
+      expected = expected_by_line[lineno]
+      executed = executed_by_line[lineno]
+      line_class = line_class_for(expected, executed)
+      if expected > 0 && executed == 0
+        evs.each { |e| e[:suppress_miss] = true }
+      end
       if evs.empty?
-        "<span class=\"line\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
+        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
       else
         rendered = render_line_with_events(line_text, evs)
-        "<span class=\"line hit\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
+        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
       end
-    end.compact
+      prev_lineno = lineno
+      last_lineno = lineno
+    end
+    if first_lineno && first_lineno > 1
+      html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
+    end
+    if last_lineno && last_lineno < src_lines.length
+      html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
+    end
 
     <<~HTML
       <!doctype html>
@@ -39,9 +64,11 @@ module GenerateResultedHtml
         <style>
           body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
           .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline; padding: 2px 8px; }
+          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
           .line:hover { background: #fff2c6; }
           .line.hit { background: #f0ffe7; }
+          .line.miss { background: #ffecec; }
+          .line.ellipsis { color: #999; }
           .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
           .hint { color: #666; margin-bottom: 8px; }
           .expr { position: relative; display: inline-block; padding-bottom: 1px; }
@@ -52,7 +79,9 @@ module GenerateResultedHtml
           .expr.depth-4 { --hl: #d78bff; }
           .expr.depth-5 { --hl: #ff6f91; }
           .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
+          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
           .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+          .marker.miss { color: #c07070; }
           .marker .tooltip {
             display: none;
             position: absolute;
@@ -115,13 +144,16 @@ module GenerateResultedHtml
 
       values = e[:values]
       total = e[:total]
-      value_text = summarize_values(values, total)
+      value_text = total.to_i == 0 ? "(not hit)" : summarize_values(values, total)
       tooltip_html = esc(value_text)
       depth_class = "depth-#{e[:depth]}"
+      miss_class = total.to_i == 0 && !e[:suppress_miss] ? " miss" : ""
       key_attr = esc(e[:key_id])
-      open_tag = "<span class=\"expr hit #{depth_class}\" data-key=\"#{key_attr}\">"
+      open_tag = "<span class=\"expr hit #{depth_class}#{miss_class}\" data-key=\"#{key_attr}\">"
       if e.fetch(:marker, true)
-        close_tag = "<span class=\"marker\" data-key=\"#{key_attr}\" aria-hidden=\"true\">🔎<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
+        marker = total.to_i == 0 ? "∅" : "🔎"
+        marker_class = total.to_i == 0 && !e[:suppress_miss] ? "marker miss" : "marker"
+        close_tag = "<span class=\"#{marker_class}\" data-key=\"#{key_attr}\" aria-hidden=\"true\">#{marker}<span class=\"tooltip\">#{tooltip_html}</span></span></span>"
       else
         close_tag = "</span>"
       end
@@ -259,6 +291,12 @@ module GenerateResultedHtml
     buckets.values.sort_by { |b| b[:start_col] }
   end
 
+  def self.line_class_for(expected, executed)
+    return " hit" if executed > 0
+    return " miss" if expected > 0
+    ""
+  end
+
   def self.normalize_events(events)
     merged = {}
     events.each do |e|
@@ -318,6 +356,54 @@ module GenerateResultedHtml
     ranges.any? { |(s, e)| line >= s && line <= e }
   end
 
+  def self.add_missing_events(events, source, filename, ranges)
+    expected = RecordInstrument.collect_locations_from_source(source, ranges || [])
+    existing = {}
+    events.each do |e|
+      key = [e[:file], e[:start_line], e[:start_col], e[:end_line], e[:end_col]]
+      existing[key] = true
+    end
+    expected.each do |loc|
+      key = [filename, loc[:start_line], loc[:start_col], loc[:end_line], loc[:end_col]]
+      next if existing[key]
+      events << {
+        key: key,
+        file: key[0],
+        start_line: key[1],
+        start_col: key[2],
+        end_line: key[3],
+        end_col: key[4],
+        values: [],
+        total: 0
+      }
+      existing[key] = true
+    end
+    events
+  end
+
+  def self.line_stats(source, ranges, events, filename)
+    expected_by_line = Hash.new(0)
+    RecordInstrument.collect_locations_from_source(source, ranges || []).each do |loc|
+      (loc[:start_line]..loc[:end_line]).each do |line|
+        expected_by_line[line] += 1
+      end
+    end
+    executed_by_line = Hash.new(0)
+    seen = {}
+    events.each do |e|
+      next unless e[:file] == filename
+      key = [e[:start_line], e[:start_col], e[:end_line], e[:end_col]]
+      next if seen[key]
+      seen[key] = true
+      if e[:total].to_i > 0
+        (e[:start_line]..e[:end_line]).each do |line|
+          executed_by_line[line] += 1
+        end
+      end
+    end
+    [expected_by_line, executed_by_line]
+  end
+
   def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil)
     raw_events = JSON.parse(File.read(events_path))
     events = normalize_events(raw_events)
@@ -340,18 +426,42 @@ module GenerateResultedHtml
       else
         ranges = nil
       end
-      html_lines = src.lines.each_with_index.map do |line, idx|
+      file_events = add_missing_events((by_file[path] || []).dup, src, path, ranges)
+      expected_by_line, executed_by_line = line_stats(src, ranges, file_events, path)
+      html_lines = []
+      prev_lineno = nil
+      first_lineno = nil
+      last_lineno = nil
+      src.lines.each_with_index do |line, idx|
         lineno = idx + 1
         next if ranges && !line_in_ranges?(lineno, ranges)
+        first_lineno ||= lineno
+        if prev_lineno && lineno > prev_lineno + 1
+          html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
+        end
         line_text = line.chomp
-        evs = aggregate_events_for_line(by_file[path] || [], lineno, line_text.length)
+        evs = aggregate_events_for_line(file_events, lineno, line_text.length)
+        expected = expected_by_line[lineno]
+        executed = executed_by_line[lineno]
+        line_class = line_class_for(expected, executed)
+        if expected > 0 && executed == 0
+          evs.each { |e| e[:suppress_miss] = true }
+        end
         if evs.empty?
-          "<span class=\"line\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
+          html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
         else
           rendered = render_line_with_events(line_text, evs)
-          "<span class=\"line hit\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
+          html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
         end
-      end.compact
+        prev_lineno = lineno
+        last_lineno = lineno
+      end
+      if first_lineno && first_lineno > 1
+        html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
+      end
+      if last_lineno && last_lineno < src.lines.length
+        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
+      end
 
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
       <<~HTML
@@ -371,9 +481,11 @@ module GenerateResultedHtml
         <style>
           body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
           .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline; padding: 2px 8px; }
+          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
           .line:hover { background: #fff2c6; }
           .line.hit { background: #f0ffe7; }
+          .line.miss { background: #ffecec; }
+          .line.ellipsis { color: #999; }
           .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
           .hint { color: #666; margin-bottom: 8px; }
           .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
@@ -385,7 +497,9 @@ module GenerateResultedHtml
           .expr.depth-4 { --hl: #d78bff; }
           .expr.depth-5 { --hl: #ff6f91; }
           .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
+          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
           .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+          .marker.miss { color: #c07070; }
           .marker .tooltip {
             display: none;
             position: absolute;
@@ -444,20 +558,43 @@ module GenerateResultedHtml
   def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil)
     events = normalize_events(events)
     ranges = normalize_ranges(ranges)
-    target_events = events.select { |e| e[:file] == filename }
+    target_events = add_missing_events(events.select { |e| e[:file] == filename }, source, filename, ranges)
+    expected_by_line, executed_by_line = line_stats(source, ranges, target_events, filename)
 
-    html_lines = source.lines.each_with_index.map do |line, idx|
+    html_lines = []
+    prev_lineno = nil
+    first_lineno = nil
+    last_lineno = nil
+    source.lines.each_with_index do |line, idx|
       lineno = idx + 1
       next if ranges && !line_in_ranges?(lineno, ranges)
+      first_lineno ||= lineno
+      if prev_lineno && lineno > prev_lineno + 1
+        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
+      end
       line_text = line.chomp
       evs = aggregate_events_for_line(target_events, lineno, line_text.length)
+      expected = expected_by_line[lineno]
+      executed = executed_by_line[lineno]
+      line_class = line_class_for(expected, executed)
+      if expected > 0 && executed == 0
+        evs.each { |e| e[:suppress_miss] = true }
+      end
       if evs.empty?
-        "<span class=\"line\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
+        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
       else
         rendered = render_line_with_events(line_text, evs)
-        "<span class=\"line hit\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
+        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
       end
-    end.compact
+      prev_lineno = lineno
+      last_lineno = lineno
+    end
+    if first_lineno && first_lineno > 1
+      html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
+    end
+    if last_lineno && last_lineno < source.lines.length
+      html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
+    end
 
     <<~HTML
       <!doctype html>
@@ -468,9 +605,11 @@ module GenerateResultedHtml
         <style>
           body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
           .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline; padding: 2px 8px; }
+          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
           .line:hover { background: #fff2c6; }
           .line.hit { background: #f0ffe7; }
+          .line.miss { background: #ffecec; }
+          .line.ellipsis { color: #999; }
           .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
           .hint { color: #666; margin-bottom: 8px; }
           .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
@@ -482,7 +621,9 @@ module GenerateResultedHtml
           .expr.depth-4 { --hl: #d78bff; }
           .expr.depth-5 { --hl: #ff6f91; }
           .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
+          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
           .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+          .marker.miss { color: #c07070; }
           .marker .tooltip {
             display: none;
             position: absolute;
@@ -547,6 +688,25 @@ module GenerateResultedHtml
     target_events = events.select { |e| e[:file] == filename }
     term_width = tty ? terminal_width : nil
 
+    expected_by_line = Hash.new(0)
+    RecordInstrument.collect_locations_from_source(source, ranges).each do |loc|
+      expected_by_line[loc[:start_line]] += 1
+    end
+    executed_by_line = Hash.new(0)
+    seen = {}
+    target_events.each do |e|
+      line = e[:start_line] || e["start_line"]
+      key = [
+        e[:start_line] || e["start_line"],
+        e[:start_col] || e["start_col"],
+        e[:end_line] || e["end_line"],
+        e[:end_col] || e["end_col"]
+      ]
+      next if seen[key]
+      seen[key] = true
+      executed_by_line[line] += 1 if line
+    end
+
     out = +""
     if with_header
       label = header_label || filename
@@ -558,7 +718,7 @@ module GenerateResultedHtml
 
     total_lines = source.lines.length
     ln_width = total_lines.to_s.length
-    prefix_for = ->(n) { format("%#{ln_width}d| ", n) }
+    prefix_for = ->(n, missing) { "#{missing ? "!" : " "}#{format("%#{ln_width}d| ", n)}" }
 
     raw_lines = source.lines.each_with_index.map do |line, idx|
       lineno = idx + 1
@@ -566,7 +726,8 @@ module GenerateResultedHtml
       line_text = line.chomp
       evs = aggregate_events_for_line(target_events, lineno, line_text.length)
       comment_value = comment_value_with_total_for_line(evs)
-      { lineno: lineno, text: line_text, comment: comment_value, prefix: prefix_for.call(lineno) }
+      missing = expected_by_line[lineno] > 0 && executed_by_line[lineno] == 0
+      { lineno: lineno, text: line_text, comment: comment_value, prefix: prefix_for.call(lineno, missing) }
     end.compact
 
     group = []
@@ -603,6 +764,11 @@ module GenerateResultedHtml
     end
 
     prev_lineno = nil
+    first_lineno = raw_lines.first && raw_lines.first[:lineno]
+    last_lineno = raw_lines.last && raw_lines.last[:lineno]
+    if first_lineno && first_lineno > 1
+      out << "...\n"
+    end
     raw_lines.each do |l|
       if prev_lineno && l[:lineno] > prev_lineno + 1
         flush_group.call
@@ -617,6 +783,10 @@ module GenerateResultedHtml
       prev_lineno = l[:lineno]
     end
     flush_group.call
+    if last_lineno
+      total_lines = source.lines.length
+      out << "...\n" if last_lineno < total_lines
+    end
 
     out
   end

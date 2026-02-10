@@ -83,6 +83,31 @@ module RecordInstrument
     modified
   end
 
+  def self.collect_locations_from_source(src, ranges)
+    ranges = normalize_ranges(ranges || [])
+    parse = Prism.parse(src)
+    if parse.errors.any?
+      raise "parse errors: #{parse.errors.map(&:message).join(", ") }"
+    end
+
+    locs = []
+    stack = [[parse.value, nil]]
+    until stack.empty?
+      node, parent = stack.pop
+      next unless node
+
+      if node.respond_to?(:location)
+        line = node.location.start_line
+        if in_ranges?(line, ranges) && wrap_expr?(node, parent)
+          locs << expr_location(node)
+        end
+      end
+
+      node.child_nodes.each { |child| stack << [child, node] }
+    end
+    locs
+  end
+
   def self.with_line_numbers(source)
     lines = source.lines
     width = lines.length.to_s.length

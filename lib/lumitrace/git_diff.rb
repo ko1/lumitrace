@@ -81,7 +81,7 @@ module Lumitrace
       ranges_by_file = parse_ranges(stdout, root, context: context)
       if include_untracked
         untracked_files(base_dir, git_cmd, root).each do |path|
-          next unless File.exist?(path)
+          next unless File.file?(path)
           line_count = File.read(path).lines.length
           next if line_count == 0
           ranges_by_file[path] << (1..line_count)
