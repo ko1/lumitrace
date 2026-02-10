@@ -342,10 +342,12 @@ module Lumitrace
             verbose_log("json: #{json_path}")
           end
           if @atexit_text
+            tty = @atexit_text == true ? $stdout.tty? : false
             text = GenerateResultedHtml.render_text_all_from_events(
               events,
               root: @atexit_output_root,
-              ranges_by_file: @atexit_ranges_by_file
+              ranges_by_file: @atexit_ranges_by_file,
+              tty: tty
             )
             if @atexit_text == true
               puts text

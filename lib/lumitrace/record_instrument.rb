@@ -77,10 +77,18 @@ module RecordInstrument
     if Lumitrace.respond_to?(:verbose_level) && Lumitrace.verbose_level >= 2
       Lumitrace.verbose_log("instrumented: #{file_label}", level: 2)
       if Lumitrace.verbose_level >= 3
-        Lumitrace.verbose_log("instrumented_source: #{file_label}\n#{modified}", level: 3)
+        Lumitrace.verbose_log("instrumented_source: #{file_label}\n#{with_line_numbers(modified)}", level: 3)
       end
     end
     modified
+  end
+
+  def self.with_line_numbers(source)
+    lines = source.lines
+    width = lines.length.to_s.length
+    lines.each_with_index.map do |line, idx|
+      format("%#{width}d| %s", idx + 1, line)
+    end.join
   end
 
   def self.collect_inserts(root, src, ranges, file_label, record_method)
@@ -341,7 +349,7 @@ module RecordInstrument
     when Numeric, TrueClass, FalseClass, NilClass
       v
     else
-      s = v.is_a?(String) ? v : v.inspect
+      s = v.inspect
       s.bytesize > 1000 ? s[0, 1000] + "..." : s
     end
   end

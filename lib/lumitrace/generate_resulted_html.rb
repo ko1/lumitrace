@@ -541,10 +541,11 @@ module GenerateResultedHtml
     HTML
   end
 
-  def self.render_text_from_events(source, events, filename: "script.rb", ranges: nil, with_header: true, header_label: nil)
+  def self.render_text_from_events(source, events, filename: "script.rb", ranges: nil, with_header: true, header_label: nil, tty: nil)
     events = normalize_events(events)
     ranges = normalize_ranges(ranges)
     target_events = events.select { |e| e[:file] == filename }
+    term_width = tty ? terminal_width : nil
 
     out = +""
     if with_header
@@ -575,7 +576,25 @@ module GenerateResultedHtml
       group.each do |l|
         if l[:comment] && !l[:comment].to_s.empty?
           pad = " " * (max_len - l[:text].length)
-          out << "#{l[:prefix]}#{l[:text]}#{pad} #=> #{l[:comment]}\n"
+          line_prefix = "#{l[:prefix]}#{l[:text]}#{pad} #=> "
+          comment = l[:comment].to_s
+          if term_width && term_width > 0
+            available = term_width - line_prefix.length
+            if available > 0
+              if comment.length > available
+                if available >= 3
+                  comment = comment[0, available - 3] + "..."
+                else
+                  comment = comment[0, available]
+                end
+              end
+              out << "#{line_prefix}#{comment}\n"
+            else
+              out << "#{l[:prefix]}#{l[:text]}\n"
+            end
+          else
+            out << "#{line_prefix}#{comment}\n"
+          end
         else
           out << "#{l[:prefix]}#{l[:text]}\n"
         end
@@ -602,7 +621,19 @@ module GenerateResultedHtml
     out
   end
 
-  def self.render_text_all_from_events(events, root: Dir.pwd, ranges_by_file: nil)
+  def self.terminal_width
+    cols = ENV["COLUMNS"].to_i
+    return cols if cols > 0
+    begin
+      require "io/console"
+      return IO.console.winsize[1] if IO.respond_to?(:console) && IO.console
+    rescue StandardError
+      nil
+    end
+    nil
+  end
+
+  def self.render_text_all_from_events(events, root: Dir.pwd, ranges_by_file: nil, tty: nil)
     events = normalize_events(events)
     by_file = events.group_by { |e| e[:file] }
     ranges_by_file = normalize_ranges_by_file(ranges_by_file)
@@ -617,7 +648,7 @@ module GenerateResultedHtml
         ranges = nil
       end
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
-      render_text_from_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel)
+      render_text_from_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel, tty: tty)
     end.compact
 
     header = "\n=== Lumitrace Results (text) ===\n\n"
