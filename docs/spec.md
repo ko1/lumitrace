@@ -144,7 +144,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 - Keep only the last N values (`max_values_per_expr`, default 3).
 - Track `total` count for how many times the expression executed.
 - Values are stored via `inspect` for non-primitive types.
-- String values are truncated to 1000 bytes for storage.
+- String values are rendered via `inspect` and then truncated to 1000 bytes.
 
 ## Fork/Exec Merge
 
@@ -199,19 +199,23 @@ lumitrace [options] exec CMD [args...]
 - Text output starts with a header line: `=== Lumitrace Results (text) ===`.
 - Each file is printed with a header: `### path/to/file.rb`.
 - Each line is prefixed with a line number like ` 12| `.
+- Lines where all instrumentable expressions are unexecuted are prefixed with `!`.
 - Skipped ranges are represented by a line containing `...`.
 - Only the last value is shown per expression; if an expression ran multiple times, the last value is annotated with the ordinal run (e.g., `#=> 2 (3rd run)`).
 - When `--text` is used and `--max` is not provided, `max_values` defaults to `1`.
 - When `ranges_by_file` is provided, only files present in the hash are shown in text output.
+- When writing to stdout (`tty: true`), long comments are truncated to the terminal width (using `COLUMNS` or `IO.console.winsize`). File output is not truncated.
 
 ## HTML Rendering
 
 - `GenerateResultedHtml.render_all` renders all files in one page.
 - Each file is shown in its own section.
-- Expressions are marked with an inline icon.
+- Expressions are marked with an inline icon (`🔎` for executed, `∅` for not hit).
 - Hovering the icon shows recorded values.
 - Only the last 3 values are shown in the tooltip; additional values are summarized as `... (+N more)`.
 - Tooltip is scrollable horizontally for long values.
+- When ranges are used, skipped sections are shown as `...` in the line-number column.
+- Lines where all instrumentable expressions are unexecuted are highlighted in a light red. If a line mixes executed and unexecuted expressions, only the unexecuted expressions are highlighted.
 
 ### Copy/Paste Behavior
 

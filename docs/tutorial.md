@@ -26,11 +26,13 @@ Text output format:
   ```
    12| 
   ```
+- Lines where all instrumentable expressions are unexecuted are prefixed with `!`.
 - Skipped ranges are shown as:
   ```
   ...
   ```
 - The last value is shown as `#=> ...` (with `(3rd run)` when run multiple times).
+- When printing to a TTY, long comments are truncated to the terminal width (from `COLUMNS` or `IO.console.winsize`).
 
 Example output (stdout):
 
@@ -123,6 +125,11 @@ If you run without `--html PATH`, the HTML output defaults to `lumitrace_recorde
 View the HTML output:
 - [lumitrace_results_01.html](https://ko1.github.io/lumitrace/sample/lumitrace_results_01.html)
 
+HTML notes:
+- Executed expressions show `🔎`; unexecuted expressions show `∅`.
+- Lines where all instrumentable expressions are unexecuted are shaded light red; mixed lines only shade the unexecuted expressions.
+- When ranges are used, skipped sections are shown as `...` in the line-number column.
+
 ### Range example
 
 When a full run is too noisy, narrow the scope to specific line ranges so you can focus on the slice you care about.
@@ -145,6 +152,7 @@ View the HTML output:
 === Lumitrace Results (text) ===
 
 ### sample/sample.rb (lines: 4-18, 28-32)
+...
  4| def score(n)
  5|   base = n + 1                 #=> 3 (3rd run)
  6|   scaled = Sample2.scale(base) #=> 6 (3rd run)
@@ -166,6 +174,7 @@ View the HTML output:
 30| 
 31| puts labels.join(", ") #=> nil
 32| p flags                #=> [false, false, true]
+...
 ```
 
 Enable HTML output via env:
@@ -220,8 +229,10 @@ lumitrace -g --git-diff-no-untracked path/to/entry.rb
 Turn this on when you need to understand how ranges were computed or why a line was (not) recorded.
 
 ```bash
-lumitrace --verbose path/to/entry.rb
+lumitrace --verbose[=LEVEL] path/to/entry.rb
 ```
+
+Levels: `1` (basic), `2` (instrumented file names), `3` (instrumented source).
 
 ### Write JSON too
 
