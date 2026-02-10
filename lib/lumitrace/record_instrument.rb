@@ -169,8 +169,8 @@ module RecordInstrument
     block && block.body.is_a?(Prism::StatementsNode)
   end
 
-  @events_by_id = {}
-  @loc_by_id = {}
+  @events_by_id = []
+  @loc_by_id = []
   @next_id = 0
   @max_values_per_expr = 3
 
@@ -196,7 +196,11 @@ module RecordInstrument
   end
 
   def self.expr_record(id, value)
-    entry = (@events_by_id[id] ||= [[], 0])
+    entry = @events_by_id[id]
+    unless entry
+      entry = [[], 0]
+      @events_by_id[id] = entry
+    end
     values = entry[0]
     entry[1] += 1
     values << value
@@ -207,10 +211,12 @@ module RecordInstrument
   end
 
   def self.events_from_ids
-    @events_by_id.map do |id, e|
+    out = []
+    @events_by_id.each_with_index do |e, id|
+      next unless e
       loc = @loc_by_id[id]
       next unless loc
-      {
+      out << {
         file: loc[:file],
         start_line: loc[:start_line],
         start_col: loc[:start_col],
@@ -219,7 +225,8 @@ module RecordInstrument
         values: e[0].map { |v| safe_value(v) },
         total: e[1]
       }
-    end.compact
+    end
+    out
   end
 
   def self.dump_json(path = nil)
