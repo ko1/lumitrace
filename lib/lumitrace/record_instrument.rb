@@ -68,7 +68,8 @@ module RecordInstrument
         line = node.location.start_line
         if in_ranges?(line, ranges) && wrap_expr?(node, parent)
           loc = expr_location(node)
-          prefix = "#{record_method}(\"#{file_label}\", #{loc[:start_line]}, #{loc[:start_col]}, #{loc[:end_line]}, #{loc[:end_col]}, ("
+          id = register_location(file_label, loc)
+          prefix = "#{record_method}(#{id}, ("
           suffix = "))"
           span_len = loc[:end_offset] - loc[:start_offset]
           inserts << { pos: loc[:start_offset], text: prefix, kind: :open, len: span_len }
@@ -168,7 +169,9 @@ module RecordInstrument
     block && block.body.is_a?(Prism::StatementsNode)
   end
 
-  @events_by_key = {}
+  @events_by_id = {}
+  @loc_by_id = {}
+  @next_id = 0
   @max_values_per_expr = 3
 
   def self.max_values_per_expr=(n)
@@ -179,29 +182,49 @@ module RecordInstrument
     @max_values_per_expr
   end
 
-  def self.expr_record(file, start_line, start_col, end_line, end_col, value)
-    key = [file, start_line, start_col, end_line, end_col]
-    entry = (@events_by_key[key] ||= {
+  def self.register_location(file, loc)
+    @next_id += 1
+    id = @next_id
+    @loc_by_id[id] = {
       file: file,
-      start_line: start_line,
-      start_col: start_col,
-      end_line: end_line,
-      end_col: end_col,
-      values: [],
-      total: 0
-    })
+      start_line: loc[:start_line],
+      start_col: loc[:start_col],
+      end_line: loc[:end_line],
+      end_col: loc[:end_col]
+    }
+    id
+  end
 
-    entry[:total] += 1
-    entry[:values] << safe_value(value)
-    if entry[:values].length > @max_values_per_expr
-      entry[:values].shift(entry[:values].length - @max_values_per_expr)
+  def self.expr_record(id, value)
+    entry = (@events_by_id[id] ||= [[], 0])
+    values = entry[0]
+    entry[1] += 1
+    values << value
+    if values.length > @max_values_per_expr
+      values.shift(values.length - @max_values_per_expr)
     end
     value
   end
 
+  def self.events_from_ids
+    @events_by_id.map do |id, e|
+      loc = @loc_by_id[id]
+      next unless loc
+      {
+        file: loc[:file],
+        start_line: loc[:start_line],
+        start_col: loc[:start_col],
+        end_line: loc[:end_line],
+        end_col: loc[:end_col],
+        values: e[0].map { |v| safe_value(v) },
+        total: e[1]
+      }
+    end.compact
+  end
+
   def self.dump_json(path = nil)
     path ||= File.expand_path("lumitrace_recorded.json", Dir.pwd)
-    File.write(path, JSON.dump(@events_by_key.values), perm: 0o600)
+    File.write(path, JSON.dump(events_from_ids), perm: 0o600)
     path
   end
 
@@ -271,27 +294,16 @@ module RecordInstrument
   end
 
   def self.events
-    @events_by_key.values.map do |e|
-      {
-        file: e[:file],
-        start_line: e[:start_line],
-        start_col: e[:start_col],
-        end_line: e[:end_line],
-        end_col: e[:end_col],
-        values: e[:values].dup,
-        total: e[:total]
-      }
-    end
+    events_from_ids
   end
 
   def self.safe_value(v)
     case v
-    when String
-      v.bytesize > 1000 ? v[0, 1000] + "..." : v
     when Numeric, TrueClass, FalseClass, NilClass
       v
     else
-      v.inspect
+      s = v.is_a?(String) ? v : v.inspect
+      s.bytesize > 1000 ? s[0, 1000] + "..." : s
     end
   end
 end

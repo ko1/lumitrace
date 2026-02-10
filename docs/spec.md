@@ -115,7 +115,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 
 - AST is parsed with Prism.
 - For each node, if it matches “wrapable” expression classes, injects:
-  - `RecordInstrument.expr_record(file, start_line, start_col, end_line, end_col, (expr))`
+  - `RecordInstrument.expr_record(id, (expr))` where `id` maps to location metadata.
 - Insertions are done by offset to preserve original formatting.
 
 ### Range Filtering
@@ -140,7 +140,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 ## Recording
 
 - Results are stored per expression key:
-  - `(file, start_line, start_col, end_line, end_col)`
+  - `id` (an integer assigned at instrumentation time) with a separate `id -> location` table.
 - Keep only the last N values (`max_values_per_expr`, default 3).
 - Track `total` count for how many times the expression executed.
 - Values are stored via `inspect` for non-primitive types.

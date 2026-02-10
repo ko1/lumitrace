@@ -4,7 +4,7 @@
 # Supported Syntax
 
 Lumitrace instruments Ruby source by wrapping selected expression nodes with
-`Lumitrace::RecordInstrument.expr_record(...)`. It does **not** rewrite the
+`Lumitrace::RecordInstrument.expr_record(id, (expr))`. It does **not** rewrite the
 entire AST, so coverage is best described as "expressions that are safe to wrap
 in parentheses and call-position contexts."
 
