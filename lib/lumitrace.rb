@@ -13,13 +13,18 @@ module Lumitrace
   @atexit_output_root = nil
   @atexit_ranges_by_file = nil
   @verbose = false
+  @verbose_level = 0
   @fork_hook_installed = false
   @fork_child = false
   @results_dir = nil
   @results_parent_pid = nil
 
-  def self.verbose_log(message)
-    return unless @verbose
+  def self.verbose_level
+    @verbose_level || 0
+  end
+
+  def self.verbose_log(message, level: 1)
+    return unless @verbose_level && @verbose_level >= level
     $stderr.puts("[lumitrace] #{message}")
   end
 
@@ -116,7 +121,8 @@ module Lumitrace
     ENV["LUMITRACE_JSON"] = effective_json == true ? "1" : effective_json == false ? "0" : effective_json.to_s
     ENV["LUMITRACE_VALUES_MAX"] = effective_max.to_s if effective_max
     ENV["LUMITRACE_ROOT"] = effective_root.to_s if effective_root
-    ENV["LUMITRACE_VERBOSE"] = effective_verbose ? "1" : "0"
+    level = effective_verbose.to_i
+    ENV["LUMITRACE_VERBOSE"] = level > 0 ? level.to_s : "0"
     if ranges_by_file
       ENV["LUMITRACE_RANGE"] = serialize_ranges_by_file(ranges_by_file)
     end
@@ -183,7 +189,7 @@ module Lumitrace
       o.on("--git-cmd PATH", "Git executable for diff") { |v| opts[:git_cmd] = v }
       o.on("--git-diff-no-untracked", "Exclude untracked files from diff") { opts[:git_diff_no_untracked] = true }
       o.on("--root PATH", "Root directory for instrumentation") { |v| opts[:root] = v }
-      o.on("--verbose", "Verbose logs to stderr") { opts[:verbose] = true }
+      o.on("--verbose[=LEVEL]", Integer, "Verbose logs to stderr (level 1-3)") { |v| opts[:verbose] = v.nil? ? 1 : v }
       if allow_help
         o.separator ""
         o.on("--help", "Show this help") { opts[:help] = true }
@@ -259,8 +265,9 @@ module Lumitrace
     effective_max = max_values.nil? ? env[:max_values] : max_values
     effective_root = root.nil? ? env[:root] : root
     effective_verbose = verbose.nil? ? env[:verbose] : verbose
-
-    @verbose = effective_verbose
+    effective_verbose = effective_verbose ? effective_verbose.to_i : 0
+    @verbose_level = effective_verbose
+    @verbose = @verbose_level > 0
     if (effective_max.nil? || (effective_max.respond_to?(:empty?) && effective_max.empty?)) && effective_text
       effective_max = 1
     end
@@ -275,7 +282,7 @@ module Lumitrace
       )
     end
 
-    verbose_log("env: text=#{env[:text]} html=#{env[:html]} json=#{env[:json]} max_values=#{env[:max_values].inspect} root=#{env[:root].inspect}") if effective_verbose
+    verbose_log("env: text=#{env[:text]} html=#{env[:html]} json=#{env[:json]} max_values=#{env[:max_values].inspect} root=#{env[:root].inspect}") if @verbose_level > 0
     RecordRequire.enable(max_values: effective_max, ranges_by_file: ranges_by_file, root: effective_root)
     resolved_root = effective_root || Dir.pwd
     if at_exit

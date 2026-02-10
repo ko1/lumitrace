@@ -8,6 +8,14 @@ module Lumitrace
     value
   end
 
+  def self.parse_env_int(value)
+    return nil if value.nil?
+    flag = parse_env_flag(value)
+    return 1 if flag == true
+    return 0 if flag == false
+    flag.to_i
+  end
+
   def self.resolve_env_options
     html_env = parse_env_flag(ENV["LUMITRACE_HTML"])
     json_env = parse_env_flag(ENV["LUMITRACE_JSON"])
@@ -32,7 +40,7 @@ module Lumitrace
       text = (text_env != false)
     end
 
-    verbose = parse_env_flag(ENV["LUMITRACE_VERBOSE"]) == true
+    verbose = parse_env_int(ENV["LUMITRACE_VERBOSE"])
     range_specs = if range_env.nil? || range_env.strip.empty?
       []
     else

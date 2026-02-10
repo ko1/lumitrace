@@ -93,7 +93,7 @@ require "lumitrace/enable"
 - `LUMITRACE_HTML`: enable HTML output; `1` uses the default path, otherwise treats the value as the HTML output path. `0`/`false` disables.
 - `LUMITRACE_JSON`: enable JSON output; `1` uses the default path, otherwise treats the value as the JSON output path. `0`/`false` disables.
 - `LUMITRACE_ENABLE`: when `1`/`true`, `require "lumitrace"` will call `Lumitrace.enable!`. When set to a non-boolean string, it is parsed as CLI-style arguments and passed to `enable!`.
-- `LUMITRACE_VERBOSE`: when `1`/`true`, prints verbose logs to stderr.
+- `LUMITRACE_VERBOSE`: verbosity level (1-3). `1`/`true` enables basic logs, `2` adds instrumented file names, `3` adds instrumented source output.
 - `LUMITRACE_RANGE`: semicolon-separated range specs (e.g. `a.rb:1-3,5-6;b.rb`).
 - `LUMITRACE_RESULTS_DIR`: internal use. Shared results directory for fork/exec merge (default: `Dir.tmpdir/lumitrace_results/<user>_<parent_pid>`).
 - `LUMITRACE_RESULTS_PARENT_PID`: internal use. Parent PID for fork/exec merge (auto-set).

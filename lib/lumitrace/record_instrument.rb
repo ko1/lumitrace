@@ -2,6 +2,26 @@ require "json"
 require "prism"
 
 module Lumitrace
+  def self.R(id, value)
+    events_by_id = RecordInstrument.events_by_id
+    entry = events_by_id[id]
+    if entry
+      max = entry.length - 2
+      idx = entry[max]
+      entry[idx] = value
+      entry[max] = (idx + 1) % max
+      entry[max + 1] += 1
+    else
+      max = RecordInstrument.max_values_per_expr
+      entry = Array.new(max + 2)
+      entry[max] = 1
+      entry[max + 1] = 1
+      entry[0] = value
+      events_by_id[id] = entry
+    end
+    value
+  end
+
 module RecordInstrument
   SKIP_NODE_CLASSES = [
     Prism::DefNode,
@@ -42,7 +62,7 @@ module RecordInstrument
     Prism::GlobalVariableReadNode
   ].freeze
 
-  def self.instrument_source(src, ranges, file_label: nil, record_method: "Lumitrace::RecordInstrument.expr_record")
+  def self.instrument_source(src, ranges, file_label: nil, record_method: "Lumitrace::R")
     file_label ||= "(unknown)"
     ranges = normalize_ranges(ranges)
 
@@ -53,7 +73,14 @@ module RecordInstrument
 
     inserts = collect_inserts(parse.value, src, ranges, file_label, record_method)
 
-    apply_insertions(src, inserts)
+    modified = apply_insertions(src, inserts)
+    if Lumitrace.respond_to?(:verbose_level) && Lumitrace.verbose_level >= 2
+      Lumitrace.verbose_log("instrumented: #{file_label}", level: 2)
+      if Lumitrace.verbose_level >= 3
+        Lumitrace.verbose_log("instrumented_source: #{file_label}\n#{modified}", level: 3)
+      end
+    end
+    modified
   end
 
   def self.collect_inserts(root, src, ranges, file_label, record_method)
@@ -182,6 +209,10 @@ module RecordInstrument
     @max_values_per_expr
   end
 
+  def self.events_by_id
+    @events_by_id
+  end
+
   def self.register_location(file, loc)
     @next_id += 1
     id = @next_id
@@ -193,26 +224,6 @@ module RecordInstrument
       end_col: loc[:end_col]
     }
     id
-  end
-
-  def self.expr_record(id, value)
-    entry = @events_by_id[id]
-    unless entry
-      max = @max_values_per_expr
-      entry = Array.new(max + 2)
-      entry[max] = 1
-      entry[max + 1] = 1
-      entry[0] = value
-      @events_by_id[id] = entry
-      return value
-    end
-
-    max = entry.length - 2
-    idx = entry[max]
-    entry[idx] = value
-    entry[max] = (idx + 1) % max
-    entry[max + 1] += 1
-    value
   end
 
   def self.events_from_ids
@@ -340,7 +351,7 @@ end
 if $PROGRAM_NAME == __FILE__
   path = ARGV[0] or abort "usage: ruby record_instrument.rb FILE RANGES_JSON [record_method] [out_path]"
   ranges = JSON.parse(ARGV[1] || "[]")
-  record_method = ARGV[2] || "Lumitrace::RecordInstrument.expr_record"
+  record_method = ARGV[2] || "Lumitrace::R"
   out = RecordInstrument.instrument_source(File.read(path), ranges, file_label: path, record_method: record_method)
 
   if ARGV[3]

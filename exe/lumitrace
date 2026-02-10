@@ -32,7 +32,7 @@ env["LUMITRACE_HTML"] = opts[:html] == true ? "1" : opts[:html] == false ? "0" :
 env["LUMITRACE_JSON"] = opts[:json] == true ? "1" : opts[:json] == false ? "0" : opts[:json].to_s if !opts[:json].nil?
 env["LUMITRACE_VALUES_MAX"] = opts[:max_values].to_s if opts[:max_values]
 env["LUMITRACE_ROOT"] = opts[:root] if opts[:root]
-env["LUMITRACE_VERBOSE"] = opts[:verbose] ? "1" : "0" if !opts[:verbose].nil?
+env["LUMITRACE_VERBOSE"] = opts[:verbose].to_s if !opts[:verbose].nil?
 if opts[:range_specs].any?
   env["LUMITRACE_RANGE"] = opts[:range_specs].join(";")
 end

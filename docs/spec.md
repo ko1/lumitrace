@@ -43,7 +43,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   - `text`: boolean or string or nil. When nil, determined from environment variables. When string, uses it as the text output path.
   - `html`: boolean or string or nil. When nil, determined from environment variables.
   - `json`: boolean or string or nil. When nil, determined from environment variables.
-  - `verbose`: boolean or nil. When nil, determined from `LUMITRACE_VERBOSE`.
+  - `verbose`: integer (level) or nil. When nil, determined from `LUMITRACE_VERBOSE`.
   - `at_exit`: boolean. When true, registers output at exit.
 - Returns: `nil`.
 - Side effects:
@@ -58,7 +58,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   - `LUMITRACE_TEXT`: control text output. `1` forces text on, `0`/`false` disables. If unset, text is enabled only when both HTML and JSON are disabled. Any other value is treated as the text output path.
   - `LUMITRACE_JSON`: enable JSON output; `1` uses the default path, otherwise treats the value as the JSON output path. `0`/`false` disables.
   - `LUMITRACE_GIT_DIFF_UNTRACKED`: include untracked files in git diff ranges (`1` default). Set to `0` to exclude.
-  - `LUMITRACE_VERBOSE`: when `1`/`true`, prints verbose logs to stderr.
+  - `LUMITRACE_VERBOSE`: verbosity level (1-3). `1`/`true` enables basic logs, `2` adds instrumented file names, `3` adds instrumented source output.
   - `LUMITRACE_ENABLE`: when `1`/`true`, `require "lumitrace"` will call `Lumitrace.enable!`. When set to a non-boolean string, it is parsed as CLI-style arguments and passed to `enable!`.
   - `LUMITRACE_RANGE`: semicolon-separated range specs, e.g. `a.rb:1-3,5-6;b.rb`.
   - `LUMITRACE_RESULTS_DIR`: internal use. Shared results directory for fork/exec merge (default: `Dir.tmpdir/lumitrace_results/<user>_<parent_pid>`).
@@ -115,7 +115,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 
 - AST is parsed with Prism.
 - For each node, if it matches “wrapable” expression classes, injects:
-  - `RecordInstrument.expr_record(id, (expr))` where `id` maps to location metadata.
+  - `Lumitrace::R(id, (expr))` where `id` maps to location metadata.
 - Insertions are done by offset to preserve original formatting.
 
 ### Range Filtering
@@ -190,7 +190,7 @@ lumitrace [options] exec CMD [args...]
 - `--git-diff-context` expands hunks by +/-N lines.
 - `--git-cmd` overrides the git executable.
 - `--git-diff-no-untracked` excludes untracked files (untracked files are included by default).
-- `--verbose` prints verbose logs to stderr.
+- `--verbose[=LEVEL]` prints verbose logs to stderr (level 1-3).
 - `LUMITRACE_VALUES_MAX` sets the default max values per expression.
 - The CLI launches a child process (Ruby or `exec` target) with `RUBYOPT=-rlumitrace` and `LUMITRACE_*` env vars.
 

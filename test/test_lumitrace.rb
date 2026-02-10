@@ -50,8 +50,8 @@ class LumiTraceTest < Minitest::Test
 
     out = Lumitrace::RecordInstrument.instrument_source(src, [], file_label: "sample.rb")
 
-    assert_match(/Lumitrace::RecordInstrument\.expr_record\(\d+, \(/, out)
-    assert_operator out.scan(/Lumitrace::RecordInstrument\.expr_record\(\d+, \(/).length, :>=, 2
+    assert_match(/Lumitrace::R\(\d+, \(/, out)
+    assert_operator out.scan(/Lumitrace::R\(\d+, \(/).length, :>=, 2
   end
 
   def test_render_all_generates_html
@@ -90,7 +90,7 @@ class LumiTraceTest < Minitest::Test
     assert_equal 7, opts[:max_values]
     assert_equal "/tmp/root", opts[:root]
     assert_equal ["a.rb:1-3,5-6"], opts[:range_specs]
-    assert_equal true, opts[:verbose]
+    assert_equal 1, opts[:verbose]
     assert_equal ["file.rb"], args
   end
 
@@ -173,7 +173,7 @@ class LumiTraceTest < Minitest::Test
               env,
               RbConfig.ruby,
               "-e",
-              "require 'lumitrace'; Lumitrace.enable!(text:false,html:false,json:false); Lumitrace::RecordInstrument.expr_record(1,1)"
+              "require 'lumitrace'; Lumitrace.enable!(text:false,html:false,json:false); Lumitrace::R(1,1)"
             )
           end
           Process.wait(pid)
