@@ -26,7 +26,7 @@ A single-file HTML app that runs Ruby.wasm in the browser and shows traced value
 
 ## How It Works (High Level)
 1. Parse the source with Prism
-2. Wrap selected expressions with `Lumitrace::RecordInstrument.expr_record`
+2. Wrap selected expressions with `Lumitrace::R` and assign expression ids
 3. `eval` the instrumented code
 4. Build HTML from recorded events
 5. Render the annotated HTML in the right pane
