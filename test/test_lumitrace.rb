@@ -252,9 +252,9 @@ class LumiTraceTest < Minitest::Test
     assert_equal "types: MyObj(1), NilClass(1)", summary
   end
 
-  def test_tooltip_summary_hides_type_counts_when_single_type
+  def test_tooltip_summary_shows_type_counts_when_single_type_and_values_absent
     summary = Lumitrace::GenerateResultedHtml.summarize_values([], 2, all_types: ["MyObj"])
-    assert_equal "", summary
+    assert_equal "types: MyObj(1)", summary
   end
 
   def test_render_line_uses_all_types_when_values_absent
@@ -306,6 +306,23 @@ class LumiTraceTest < Minitest::Test
       ]
     )
     assert_equal "2 (Integer) types: Integer(2), NilClass(1) (3rd run)", comment_multi
+  end
+
+  def test_comment_value_shows_single_type_when_values_absent
+    comment = Lumitrace::GenerateResultedHtml.comment_value_with_total_for_line(
+      [
+        {
+          marker: true,
+          kind: "expr",
+          start_col: 0,
+          end_col: 1,
+          sampled_values: [],
+          all_value_types: { "Integer" => 3 },
+          total: 3
+        }
+      ]
+    )
+    assert_equal "types: Integer(3) (3rd run)", comment
   end
 
   def test_normalize_events_keeps_sampled_value_objects

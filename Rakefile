@@ -13,6 +13,11 @@ task default: :test
 
 require "benchmark"
 
+desc "Sync embedded Lumitrace code in runv/index.html"
+task :runv do
+  ruby "runv/sync_inline.rb"
+end
+
 desc "Run simple runtime comparison for lumitrace vs ruby"
 task :bench do
   sample = File.expand_path("bench/bench_sample.rb", __dir__)

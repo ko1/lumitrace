@@ -281,9 +281,10 @@ module GenerateResultedHtml
     sampled_last = best[:sampled_values]&.last
     v, t = last_value_to_pair(sampled_last)
     all_types = best[:all_value_types]
-    type_text = type_list_text(all_types, only_if_multiple: true)
+    show_single_type = best[:sampled_values].nil? || best[:sampled_values].empty?
+    type_text = type_list_text(all_types, only_if_multiple: !show_single_type)
     total = best[:total]
-    value = if best[:sampled_values].nil? || best[:sampled_values].empty?
+    value = if show_single_type
       type_text || ""
     else
       base = format_value(v, type: t)
@@ -328,7 +329,7 @@ module GenerateResultedHtml
 
   def self.summarize_values(values, total = nil, all_types: nil)
     if values.nil? || values.empty?
-      multi = type_list_text(all_types, only_if_multiple: true)
+      multi = type_list_text(all_types, only_if_multiple: false)
       return multi if multi
       return ""
     end

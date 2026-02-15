@@ -16,6 +16,8 @@ A single-file HTML app that runs Ruby.wasm in the browser and shows traced value
 ## Features
 - **Ruby.wasm execution**
   - Run via `Run` button or `Ctrl/Cmd + Enter`
+- **Collect mode switch**
+  - Select `history`, `last`, or `types` before running
 - **Output capture**
   - Captures `$stdout` / `$stderr` and renders them in the Output pane
 - **Annotated view**
@@ -32,16 +34,21 @@ A single-file HTML app that runs Ruby.wasm in the browser and shows traced value
 5. Render the annotated HTML in the right pane
 
 ## Constraints / Notes
-- Opening `index.html` via `file://` will fail due to CORS; use a local server
+- `index.html` is self-contained and can run with `file://` in browsers that allow Ruby.wasm loading
 - No file I/O in the browser; everything runs in-memory
-- `index.html` fetches `../lib/lumitrace/record_instrument.rb` and `../lib/lumitrace/generate_resulted_html.rb` at runtime
+- Lumitrace Ruby code is embedded in `index.html`
 
-## Usage
+## Sync Embedded Lumitrace
 ```bash
-python3 -m http.server
+ruby runv/sync_inline.rb
 ```
 
-Open `http://localhost:8000/index.html` in your browser.
+This command regenerates the embedded Lumitrace block in `runv/index.html` from:
+- `lib/lumitrace/record_instrument.rb`
+- `lib/lumitrace/generate_resulted_html.rb`
+
+## Usage
+Open `runv/index.html` directly, or serve it via a local server.
 
 ## Possible Next Steps
 - Adjust the Annotated view styling
@@ -50,4 +57,4 @@ Open `http://localhost:8000/index.html` in your browser.
 
 ---
 
-Built with Ruby.wasm, Prism, and [Lumitrace](https://github.com/ko1/lumitrace/) library files from this repository.
+Built with Ruby.wasm, Prism, and embedded [Lumitrace](https://github.com/ko1/lumitrace/) code synced from this repository.
