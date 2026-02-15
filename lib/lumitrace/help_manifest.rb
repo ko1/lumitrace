@@ -32,7 +32,7 @@ module Lumitrace
         },
         {
           command: "lumitrace [options] exec CMD [args...]",
-          description: "Prefer this when direct script execution is not practical (e.g. Rails/RSpec commands)."
+          description: "Use this for command-style entrypoints (e.g. rails/rspec via binstubs or bundle exec)."
         },
         {
           command: "lumitrace help [--format text|json]",

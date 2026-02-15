@@ -23,7 +23,7 @@
 - `lumitrace [options] script.rb [ruby_opt]`
   - Run a Ruby script with Lumitrace enabled.
 - `lumitrace [options] exec CMD [args...]`
-  - Prefer this when direct script execution is not practical (e.g. Rails/RSpec commands).
+  - Use this for command-style entrypoints (e.g. rails/rspec via binstubs or bundle exec).
 - `lumitrace help [--format text|json]`
   - Show AI/human help.
 - `lumitrace schema [--format text|json]`
