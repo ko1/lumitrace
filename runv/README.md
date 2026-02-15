@@ -34,7 +34,7 @@ A single-file HTML app that runs Ruby.wasm in the browser and shows traced value
 ## Constraints / Notes
 - Opening `index.html` via `file://` will fail due to CORS; use a local server
 - No file I/O in the browser; everything runs in-memory
-- A minimal subset of [Lumitrace](https://github.com/ko1/lumitrace/) is inlined into `index.html`
+- `index.html` fetches `../lib/lumitrace/record_instrument.rb` and `../lib/lumitrace/generate_resulted_html.rb` at runtime
 
 ## Usage
 ```bash
@@ -46,8 +46,8 @@ Open `http://localhost:8000/index.html` in your browser.
 ## Possible Next Steps
 - Adjust the Annotated view styling
 - Add layout ratios between Editor and Output
-- Move inline [Lumitrace](https://github.com/ko1/lumitrace/) code into separate files
+- Pre-bundle runtime dependencies for offline use
 
 ---
 
-Built with Ruby.wasm, Prism, and inline [Lumitrace](https://github.com/ko1/lumitrace/) logic.
+Built with Ruby.wasm, Prism, and [Lumitrace](https://github.com/ko1/lumitrace/) library files from this repository.
