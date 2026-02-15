@@ -32,7 +32,7 @@ module Lumitrace
         },
         {
           command: "lumitrace [options] exec CMD [args...]",
-          description: "Run an arbitrary command with Lumitrace env injected."
+          description: "Prefer this when direct script execution is not practical (e.g. Rails/RSpec commands)."
         },
         {
           command: "lumitrace help [--format text|json]",
@@ -70,6 +70,7 @@ module Lumitrace
       examples: [
         "lumitrace --collect-mode history --max-samples 5 -j app.rb",
         "lumitrace --collect-mode types -h -j app.rb",
+        "lumitrace --collect-mode last -j exec bin/rails test",
         "lumitrace help --format json",
         "lumitrace schema --format json"
       ]

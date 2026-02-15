@@ -23,7 +23,7 @@
 - `lumitrace [options] script.rb [ruby_opt]`
   - Run a Ruby script with Lumitrace enabled.
 - `lumitrace [options] exec CMD [args...]`
-  - Run an arbitrary command with Lumitrace env injected.
+  - Prefer this when direct script execution is not practical (e.g. Rails/RSpec commands).
 - `lumitrace help [--format text|json]`
   - Show AI/human help.
 - `lumitrace schema [--format text|json]`
@@ -46,5 +46,6 @@
 ## Examples
 - `lumitrace --collect-mode history --max-samples 5 -j app.rb`
 - `lumitrace --collect-mode types -h -j app.rb`
+- `lumitrace --collect-mode last -j exec bin/rails test`
 - `lumitrace help --format json`
 - `lumitrace schema --format json`
