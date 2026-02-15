@@ -117,6 +117,27 @@ class LumiTraceTest < Minitest::Test
     assert_equal File.expand_path("/tmp/root"), opts[:root]
   end
 
+  def test_parse_format_options_json
+    opts, _parser = Lumitrace.parse_format_options(["--format", "json"], banner: "usage: x")
+    assert_equal "json", opts[:format]
+    assert_equal false, opts[:help]
+  end
+
+  def test_help_manifest_and_render_json
+    data = JSON.parse(Lumitrace.render_help(format: "json"))
+    assert_equal Lumitrace::VERSION, data["version"]
+    assert_equal "lumitrace help --format json", data["entrypoint"]["primary"]
+    assert_equal 1, data["help_version"]
+  end
+
+  def test_schema_manifest_and_render_json
+    data = JSON.parse(Lumitrace.render_schema(format: "json"))
+    assert_equal Lumitrace::VERSION, data["version"]
+    assert_equal 1, data["schema_version"]
+    modes = data.fetch("collect_modes").map { |e| e.fetch("mode") }
+    assert_equal Lumitrace::COLLECT_MODES, modes
+  end
+
   def test_resolve_ranges_by_file_from_specs
     ranges = Lumitrace.resolve_ranges_by_file(
       ["a.rb:1-3,5-6", "b.rb"],
@@ -156,7 +177,7 @@ class LumiTraceTest < Minitest::Test
     assert_equal 4, merged[0][:total]
     assert_equal ["2", "3", "4"], merged[0][:sampled_values].map { |v| v[:preview] }
     assert_equal ["Integer", "Integer", "Integer"], merged[0][:sampled_values].map { |v| v[:type] }
-    assert_equal({ "Integer" => 4 }, merged[0][:all_value_types])
+    assert_equal({ "Integer" => 4 }, merged[0][:types])
     assert_nil merged[0][:sampled_value_types]
   end
 
@@ -183,7 +204,7 @@ class LumiTraceTest < Minitest::Test
       assert_equal 1, events.length
 
       event = events.first
-      assert_equal({ "Integer" => 1, "NilClass" => 1, "String" => 1 }, event[:all_value_types])
+      assert_equal({ "Integer" => 1, "NilClass" => 1, "String" => 1 }, event[:types])
       assert_equal "String", event[:last_value][:type]
       assert_equal true, event[:last_value][:length] > 120
       assert_match(/\A"/, event[:last_value][:preview])
@@ -217,7 +238,7 @@ class LumiTraceTest < Minitest::Test
       event = events.first
       assert_equal ["1", "nil", "\"x\""], event[:sampled_values].map { |v| v[:preview] }
       assert_equal ["Integer", "NilClass", "String"], event[:sampled_values].map { |v| v[:type] }
-      assert_equal({ "Integer" => 1, "NilClass" => 1, "String" => 1 }, event[:all_value_types])
+      assert_equal({ "Integer" => 1, "NilClass" => 1, "String" => 1 }, event[:types])
       assert_nil event[:sampled_value_types]
     end
   end
@@ -266,7 +287,7 @@ class LumiTraceTest < Minitest::Test
           start_col: 0,
           end_col: 1,
           sampled_values: [],
-          all_value_types: { "MyObj" => 2, "NilClass" => 1 },
+          types: { "MyObj" => 2, "NilClass" => 1 },
           total: 2,
           kind: "expr",
           depth: 1
@@ -285,7 +306,7 @@ class LumiTraceTest < Minitest::Test
           start_col: 0,
           end_col: 1,
           sampled_values: [{ type: "Integer", preview: "2" }],
-          all_value_types: { "Integer" => 3 },
+          types: { "Integer" => 3 },
           total: 3
         }
       ]
@@ -300,7 +321,7 @@ class LumiTraceTest < Minitest::Test
           start_col: 0,
           end_col: 1,
           sampled_values: [{ type: "Integer", preview: "2" }],
-          all_value_types: { "Integer" => 2, "NilClass" => 1 },
+          types: { "Integer" => 2, "NilClass" => 1 },
           total: 3
         }
       ]
@@ -317,7 +338,7 @@ class LumiTraceTest < Minitest::Test
           start_col: 0,
           end_col: 1,
           sampled_values: [],
-          all_value_types: { "Integer" => 3 },
+          types: { "Integer" => 3 },
           total: 3
         }
       ]

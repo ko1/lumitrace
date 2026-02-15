@@ -4,9 +4,47 @@
 require "rbconfig"
 require_relative "../lib/lumitrace"
 
+if ARGV.first == "help"
+  ARGV.shift
+  begin
+    opts, parser = Lumitrace.parse_format_options(
+      ARGV,
+      banner: "usage: lumitrace help [--format text|json]"
+    )
+  rescue OptionParser::ParseError, ArgumentError => e
+    warn e.message
+    exit 1
+  end
+  if opts[:help]
+    puts parser
+    exit 0
+  end
+  puts Lumitrace.render_help(format: opts[:format])
+  exit 0
+end
+
+if ARGV.first == "schema"
+  ARGV.shift
+  begin
+    opts, parser = Lumitrace.parse_format_options(
+      ARGV,
+      banner: "usage: lumitrace schema [--format text|json]"
+    )
+  rescue OptionParser::ParseError, ArgumentError => e
+    warn e.message
+    exit 1
+  end
+  if opts[:help]
+    puts parser
+    exit 0
+  end
+  puts Lumitrace.render_schema(format: opts[:format])
+  exit 0
+end
+
 opts, args, parser = Lumitrace.parse_cli_options(
   ARGV,
-  banner: "usage: lumitrace [options] script.rb [ruby_opt] | lumitrace [options] exec CMD [args...]",
+  banner: "usage: lumitrace [options] script.rb [ruby_opt] | lumitrace [options] exec CMD [args...] | lumitrace help [--format text|json] | lumitrace schema [--format text|json]",
   allow_help: true,
   order: :preserve
 )

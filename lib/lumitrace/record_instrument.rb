@@ -289,7 +289,7 @@ module RecordInstrument
       entry[max] = max == 1 ? 0 : 1
       entry[max + 1] = 1
       entry[0] = value
-      entry[max + 2] = { all_value_types: { value_type_name(value) => 1 } }
+      entry[max + 2] = { types: { value_type_name(value) => 1 } }
       events_by_id[id] = entry
     end
     value
@@ -301,11 +301,11 @@ module RecordInstrument
     if entry
       entry[:total] += 1
     else
-      entry = { total: 1, all_value_types: {} }
+      entry = { total: 1, types: {} }
       events_by_id[id] = entry
     end
     type = value_type_name(value)
-    entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+    entry[:types][type] = (entry[:types][type] || 0) + 1
     value
   end
 
@@ -316,11 +316,11 @@ module RecordInstrument
       entry[:last_value] = value
       entry[:total] += 1
     else
-      entry = { last_value: value, total: 1, all_value_types: {} }
+      entry = { last_value: value, total: 1, types: {} }
       events_by_id[id] = entry
     end
     type = value_type_name(value)
-    entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+    entry[:types][type] = (entry[:types][type] || 0) + 1
     value
   end
 
@@ -366,7 +366,7 @@ module RecordInstrument
           kind: loc[:kind].to_s,
           name: loc[:name],
           sampled_values: raw_values.map { |v| summarize_value(v, type: value_type_name(v)) },
-          all_value_types: sorted_type_counts(all_types),
+          types: sorted_type_counts(all_types),
           total: e[max + 1]
         }
       when :types
@@ -378,7 +378,7 @@ module RecordInstrument
           end_col: loc[:end_col],
           kind: loc[:kind].to_s,
           name: loc[:name],
-          all_value_types: sorted_type_counts(e[:all_value_types]),
+          types: sorted_type_counts(e[:types]),
           total: e[:total]
         }
       else # :last
@@ -393,7 +393,7 @@ module RecordInstrument
           kind: loc[:kind].to_s,
           name: loc[:name],
           last_value: summarize_value(last_raw, type: last_type),
-          all_value_types: sorted_type_counts(e[:all_value_types]),
+          types: sorted_type_counts(e[:types]),
           total: e[:total]
         }
       end
@@ -418,7 +418,7 @@ module RecordInstrument
   end
 
   def self.history_ring_size(entry)
-    if entry[-1].is_a?(Hash) && entry[-1].key?(:all_value_types)
+    if entry[-1].is_a?(Hash) && entry[-1].key?(:types)
       entry.length - 3
     else
       entry.length - 2
@@ -427,7 +427,7 @@ module RecordInstrument
 
   def self.history_type_set(entry)
     return nil unless entry[-1].is_a?(Hash)
-    entry[-1][:all_value_types]
+    entry[-1][:types]
   end
 
   def self.dump_json(path = nil)
@@ -476,7 +476,7 @@ module RecordInstrument
         mode: mode,
         sampled_values: [],
         last_value: nil,
-        all_value_types: {},
+        types: {},
         total: 0
       })
 
@@ -488,28 +488,28 @@ module RecordInstrument
         values = e[:sampled_values] || e["sampled_values"] || []
         normalized_values = values.map { |v| normalize_last_value(v) }
         entry[:sampled_values].concat(normalized_values)
-        all_types = normalize_type_counts(e[:all_value_types] || e["all_value_types"])
+        all_types = normalize_type_counts(e[:types] || e["types"])
         if all_types.empty?
           normalized_values.each do |v|
             next unless v
             t = v[:type] || v["type"]
             next unless t && !t.to_s.empty?
             tt = t.to_s
-            entry[:all_value_types][tt] = (entry[:all_value_types][tt] || 0) + 1
+            entry[:types][tt] = (entry[:types][tt] || 0) + 1
           end
         else
-          all_types.each { |t, c| entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c }
+          all_types.each { |t, c| entry[:types][t] = (entry[:types][t] || 0) + c }
         end
         if max_samples && max_samples.to_i > 0 && entry[:sampled_values].length > max_samples.to_i
           entry[:sampled_values] = entry[:sampled_values].last(max_samples.to_i)
         end
       when :last
-        all_types = normalize_type_counts(e[:all_value_types] || e["all_value_types"])
-        all_types.each { |t, c| entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c }
+        all_types = normalize_type_counts(e[:types] || e["types"])
+        all_types.each { |t, c| entry[:types][t] = (entry[:types][t] || 0) + c }
         entry[:last_value] = normalize_last_value(e[:last_value] || e["last_value"])
       else
-        all_types = normalize_type_counts(e[:all_value_types] || e["all_value_types"])
-        all_types.each { |t, c| entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c }
+        all_types = normalize_type_counts(e[:types] || e["types"])
+        all_types.each { |t, c| entry[:types][t] = (entry[:types][t] || 0) + c }
       end
     end
     by_key.values.map do |entry|
@@ -526,12 +526,12 @@ module RecordInstrument
       case entry[:mode]
       when :history
         out[:sampled_values] = entry[:sampled_values]
-        out[:all_value_types] = sorted_type_counts(entry[:all_value_types])
+        out[:types] = sorted_type_counts(entry[:types])
       when :last
         out[:last_value] = entry[:last_value]
-        out[:all_value_types] = sorted_type_counts(entry[:all_value_types])
+        out[:types] = sorted_type_counts(entry[:types])
       else
-        out[:all_value_types] = sorted_type_counts(entry[:all_value_types])
+        out[:types] = sorted_type_counts(entry[:types])
       end
       out
     end

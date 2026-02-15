@@ -212,7 +212,7 @@ module GenerateResultedHtml
       next if t <= s
 
       values = e[:sampled_values]
-      all_types = e[:all_value_types]
+      all_types = e[:types]
       total = e[:total]
       label = if e[:kind].to_s == "arg" && e[:name]
         "arg #{e[:name]}"
@@ -280,7 +280,7 @@ module GenerateResultedHtml
 
     sampled_last = best[:sampled_values]&.last
     v, t = last_value_to_pair(sampled_last)
-    all_types = best[:all_value_types]
+    all_types = best[:types]
     show_single_type = best[:sampled_values].nil? || best[:sampled_values].empty?
     type_text = type_list_text(all_types, only_if_multiple: !show_single_type)
     total = best[:total]
@@ -390,7 +390,7 @@ module GenerateResultedHtml
         kind: e[:kind],
         name: e[:name],
         sampled_values: e[:sampled_values],
-        all_value_types: e[:all_value_types],
+        types: e[:types],
         total: e[:total]
       }
     end
@@ -436,14 +436,14 @@ module GenerateResultedHtml
         kind: kind,
         name: name,
         sampled_values: [],
-        all_value_types: {},
+        types: {},
         total: 0
       })
 
       vals = e["sampled_values"] || e[:sampled_values] || []
       entry[:sampled_values].concat(vals)
-      normalize_type_counts(e["all_value_types"] || e[:all_value_types]).each do |t, c|
-        entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c
+      normalize_type_counts(e["types"] || e[:types]).each do |t, c|
+        entry[:types][t] = (entry[:types][t] || 0) + c
       end
       if vals.empty?
         last_value = e["last_value"] || e[:last_value]
@@ -451,7 +451,7 @@ module GenerateResultedHtml
       end
       entry[:total] += (e["total"] || e[:total] || vals.length)
     end
-    merged.each_value { |v| v[:all_value_types] = sorted_type_counts(v[:all_value_types]) }
+    merged.each_value { |v| v[:types] = sorted_type_counts(v[:types]) }
     merged.values
   end
 
@@ -530,7 +530,7 @@ module GenerateResultedHtml
           kind: loc[:kind],
           name: loc[:name],
           sampled_values: [],
-          all_value_types: {},
+          types: {},
           total: 0
         }
         existing[key] = true

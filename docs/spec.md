@@ -7,6 +7,12 @@
 
 Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSequence.translate` when available), records expression results, and renders text or HTML output that overlays recorded values on your code. It is designed for local “what happened here?” inspection.
 
+## AI-Oriented Docs
+
+- AI help reference: `docs/ai-help.md`
+- AI schema reference: `docs/ai-schema.md`
+- Regenerate both files with: `rake docs:ai`
+
 ## Goals
 
 - Record expression results with minimal friction.
@@ -175,7 +181,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   "kind": "expr",
   "name": null,
   "last_value": { "type": "String", "preview": "\"ok\"" },
-  "all_value_types": { "Integer": 10, "NilClass": 2, "String": 111 },
+  "types": { "Integer": 10, "NilClass": 2, "String": 111 },
   "total": 123
 }
 ```
@@ -191,7 +197,7 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   "end_col": 20,
   "kind": "expr",
   "name": null,
-  "all_value_types": { "Integer": 10, "NilClass": 2, "String": 111 },
+  "types": { "Integer": 10, "NilClass": 2, "String": 111 },
   "total": 123
 }
 ```
@@ -212,13 +218,13 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
     { "type": "NilClass", "preview": "nil" },
     { "type": "String", "preview": "\"ok\"" }
   ],
-  "all_value_types": { "Integer": 10, "NilClass": 2, "String": 111 },
+  "types": { "Integer": 10, "NilClass": 2, "String": 111 },
   "total": 123
 }
 ```
 
 - `last_value`: summary of the last observed value: `{ type, preview }` (+ `length` only when truncated).
-- `all_value_types`: observed Ruby class counts (class name => count).
+- `types`: observed Ruby class counts (class name => count).
 - `sampled_values`: retained sample (last N values) of summary objects (`{ type, preview }` + optional `length`) in `history` mode.
 
 ## CLI

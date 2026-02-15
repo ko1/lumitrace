@@ -6,6 +6,9 @@ require_relative "lumitrace/version"
 require_relative "lumitrace/record_instrument"
 require_relative "lumitrace/generate_resulted_html"
 require_relative "lumitrace/env"
+require_relative "lumitrace/help_manifest"
+require_relative "lumitrace/schema_manifest"
+require_relative "lumitrace/ai_docs"
 
 module Lumitrace
   class Error < StandardError; end
@@ -55,10 +58,10 @@ module Lumitrace
               entry[:last_value] = value
               entry[:total] += 1
             else
-              entry = { last_value: value, total: 1, all_value_types: {} }
+              entry = { last_value: value, total: 1, types: {} }
               events_by_id[id] = entry
             end
-            entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+            entry[:types][type] = (entry[:types][type] || 0) + 1
             value
           end
         end
@@ -73,10 +76,10 @@ module Lumitrace
             if entry
               entry[:total] += 1
             else
-              entry = { total: 1, all_value_types: {} }
+              entry = { total: 1, types: {} }
               events_by_id[id] = entry
             end
-            entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+            entry[:types][type] = (entry[:types][type] || 0) + 1
             value
           end
         end
@@ -95,10 +98,10 @@ module Lumitrace
               entry[max] = (idx + 1) % max
               entry[max + 1] += 1
               meta = entry[max + 2]
-              if meta && (types = meta[:all_value_types])
+              if meta && (types = meta[:types])
                 types[type] = (types[type] || 0) + 1
               else
-                entry[max + 2] = { all_value_types: { type => 1 } }
+                entry[max + 2] = { types: { type => 1 } }
               end
             else
               max = RecordInstrument.max_samples_per_expr
@@ -106,7 +109,7 @@ module Lumitrace
               entry[max] = max == 1 ? 0 : 1
               entry[max + 1] = 1
               entry[0] = value
-              entry[max + 2] = { all_value_types: { type => 1 } }
+              entry[max + 2] = { types: { type => 1 } }
               events_by_id[id] = entry
             end
             value
@@ -337,6 +340,32 @@ module Lumitrace
     )
     opts
   end
+
+  def self.parse_format_options(argv, banner:)
+    require "optparse"
+
+    opts = {
+      format: "text",
+      help: false
+    }
+
+    parser = OptionParser.new do |o|
+      o.banner = banner
+      o.separator ""
+      o.separator "Options:"
+      o.on("--format FORMAT", "Output format: text, json") { |v| opts[:format] = v }
+      o.separator ""
+      o.on("--help", "Show this help") { opts[:help] = true }
+    end
+
+    remaining = parser.parse(argv)
+    unless remaining.empty?
+      raise OptionParser::InvalidOption, remaining.join(" ")
+    end
+    opts[:format] = normalize_output_format(opts[:format])
+    [opts, parser]
+  end
+
   def self.enable!(max_samples: nil, ranges_by_file: nil, root: nil, text: nil, html: nil, json: nil, verbose: nil, collect_mode: nil, at_exit: true)
     require_relative "lumitrace/record_require"
     env = resolve_env_options

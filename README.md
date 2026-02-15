@@ -8,6 +8,8 @@ Lumitrace instruments Ruby source code at load time, records expression results,
 - [Tutorial](https://ko1.github.io/lumitrace/docs/tutorial.html)
 - [Tutorial in Japanese](https://ko1.github.io/lumitrace/docs/tutorial.ja.html)
 - [Spec](https://ko1.github.io/lumitrace/docs/spec.html)
+- [AI Help](https://ko1.github.io/lumitrace/docs/ai-help.html)
+- [AI Schema](https://ko1.github.io/lumitrace/docs/ai-schema.html)
 - [Supported Syntax](https://ko1.github.io/lumitrace/docs/supported_syntax.html)
 - [GitHub repository](https://github.com/ko1/lumitrace)
 
@@ -57,6 +59,14 @@ Restrict to specific line ranges:
 lumitrace --range path/to/entry.rb:10-20,30-35 path/to/entry.rb
 ```
 
+Show AI/human help:
+
+```bash
+lumitrace help
+lumitrace help --format json
+lumitrace schema --format json
+```
+
 ### Library
 
 Enable instrumentation and HTML output at exit:
@@ -85,6 +95,21 @@ require "lumitrace/enable"
 - JSON: written only when `--json` (CLI) or `LUMITRACE_JSON` (library/CLI) is provided. Default filename is `lumitrace_recorded.json`.
 - JSON collection mode: `--collect-mode=last|types|history` (default `last`).
 - Fork/exec: merged by default. Child processes write fragments under `LUMITRACE_RESULTS_DIR`.
+
+JSON event entries always include `types` (type-name => count).
+
+```json
+{
+  "file": "/abs/path/app.rb",
+  "start_line": 10,
+  "start_col": 2,
+  "end_line": 10,
+  "end_col": 9,
+  "kind": "expr",
+  "types": { "Integer": 3, "NilClass": 1 },
+  "total": 4
+}
+```
 
 ## Environment Variables
 

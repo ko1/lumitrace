@@ -18,6 +18,22 @@ task :runv do
   ruby "runv/sync_inline.rb"
 end
 
+namespace :docs do
+  desc "Generate AI help/schema docs from manifests"
+  task :ai do
+    require_relative "lib/lumitrace"
+
+    help_path = File.expand_path("docs/ai-help.md", __dir__)
+    schema_path = File.expand_path("docs/ai-schema.md", __dir__)
+
+    File.write(help_path, Lumitrace.render_ai_help_markdown)
+    File.write(schema_path, Lumitrace.render_ai_schema_markdown)
+
+    puts "updated #{help_path}"
+    puts "updated #{schema_path}"
+  end
+end
+
 desc "Run simple runtime comparison for lumitrace vs ruby"
 task :bench do
   sample = File.expand_path("bench/bench_sample.rb", __dir__)
