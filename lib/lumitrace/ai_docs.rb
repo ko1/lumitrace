@@ -27,6 +27,11 @@ module Lumitrace
     lines << ""
     lines << "## Recommended Flow"
     data[:recommended_flow].each { |step| lines << "- #{step}" }
+    if data[:ai_usage_tips] && !data[:ai_usage_tips].empty?
+      lines << ""
+      lines << "## AI Usage Tips"
+      data[:ai_usage_tips].each { |tip| lines << "- #{tip}" }
+    end
     lines << ""
     lines << "## Commands"
     data[:commands].each do |cmd|

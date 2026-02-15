@@ -19,6 +19,12 @@ module Lumitrace
         "Run lumitrace with `--collect-mode` and optional `--max-samples`.",
         "Inspect JSON/HTML/text outputs depending on your task."
       ],
+      ai_usage_tips: [
+        "First run with `--collect-mode types` to get a compact shape of runtime behavior.",
+        "Then switch to `--collect-mode last` for final value inspection on suspicious lines.",
+        "Use `--collect-mode history --max-samples N` only when value transitions matter.",
+        "Combine `--range` or `--git-diff` to keep outputs small and focused."
+      ],
       commands: [
         {
           command: "lumitrace [options] script.rb [ruby_opt]",

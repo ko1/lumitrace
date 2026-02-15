@@ -2,7 +2,7 @@
 
 # Lumitrace JSON Schema
 
-- Version: 0.4.0
+- Version: 0.4.1
 - Schema version: 1
 - Top level: array of event
 

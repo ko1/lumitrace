@@ -2,7 +2,7 @@
 
 # Lumitrace Help
 
-- Version: 0.4.0
+- Version: 0.4.1
 - Help version: 1
 - Primary JSON entrypoint: `lumitrace help --format json`
 - Schema JSON entrypoint: `lumitrace schema --format json`
@@ -12,6 +12,12 @@
 - Read `lumitrace schema --format json` to understand output structure.
 - Run lumitrace with `--collect-mode` and optional `--max-samples`.
 - Inspect JSON/HTML/text outputs depending on your task.
+
+## AI Usage Tips
+- First run with `--collect-mode types` to get a compact shape of runtime behavior.
+- Then switch to `--collect-mode last` for final value inspection on suspicious lines.
+- Use `--collect-mode history --max-samples N` only when value transitions matter.
+- Combine `--range` or `--git-diff` to keep outputs small and focused.
 
 ## Commands
 - `lumitrace [options] script.rb [ruby_opt]`

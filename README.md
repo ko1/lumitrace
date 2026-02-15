@@ -67,6 +67,9 @@ lumitrace help --format json
 lumitrace schema --format json
 ```
 
+AI-oriented usage guide (Japanese):
+- `docs/tutorial.ja.md` section "AI と使う"
+
 ### Library
 
 Enable instrumentation and HTML output at exit:

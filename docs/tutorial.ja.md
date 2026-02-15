@@ -294,6 +294,37 @@ GitHub Actions への追加手順（`LUMITRACE_GIT_DIFF` や Pages へのアッ�
 
 fork/exec の結果はデフォルトでマージされます。親プロセスが最終出力を行い、子プロセスは `LUMITRACE_RESULTS_DIR` に断片 JSON を保存します。
 
+### AI と使う
+
+AI に読ませる前提なら、次の順番にすると効率が良いです。
+
+1. まず型分布だけ取る（安く全体像を見る）
+
+```bash
+lumitrace --collect-mode types -j path/to/entry.rb
+```
+
+2. 次に最終値を見る（値の当たりを付ける）
+
+```bash
+lumitrace --collect-mode last -j path/to/entry.rb
+```
+
+3. 変化が必要な箇所だけ履歴を見る
+
+```bash
+lumitrace --collect-mode history --max-samples 5 -j path/to/entry.rb
+```
+
+4. 対象を絞る（トークン節約）
+
+```bash
+lumitrace --collect-mode last -j --range path/to/entry.rb:120-180 path/to/entry.rb
+lumitrace --collect-mode last -j -g path/to/entry.rb
+```
+
+補助情報は `lumitrace help --format json` と `lumitrace schema --format json` で機械可読に取得できます。
+
 ## 2. ライブラリとして使う
 
 CLI を使わずアプリに組み込みたい場合はここから始めます。
