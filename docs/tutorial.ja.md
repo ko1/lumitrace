@@ -190,7 +190,7 @@ LUMITRACE_HTML=/tmp/out.html lumitrace path/to/entry.rb
 出力が長すぎたり読みづらいときに、1 行あたりの記録数を制限します。
 
 ```bash
-LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
+LUMITRACE_MAX_SAMPLES=5 lumitrace path/to/entry.rb
 ```
 
 ### 行範囲を限定する
@@ -422,5 +422,5 @@ lumitrace --root /path/to/project your_script.rb
 
 日常的に効く小さなコツをまとめます。
 
-- 出力が大きい場合は `LUMITRACE_VALUES_MAX` を下げると軽くなります。
+- 出力が大きい場合は `LUMITRACE_MAX_SAMPLES` を下げると軽くなります。
 - 1 ファイルだけの確認は `enable_git_diff` が便利です。

@@ -190,7 +190,7 @@ LUMITRACE_HTML=/tmp/out.html lumitrace path/to/entry.rb
 If the output is too long or slow to scan, cap how many values per line are recorded.
 
 ```bash
-LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
+LUMITRACE_MAX_SAMPLES=5 lumitrace path/to/entry.rb
 ```
 
 ### Limit to specific lines
@@ -421,5 +421,5 @@ lumitrace --root /path/to/project your_script.rb
 
 Small knobs that keep outputs readable and noise low in day-to-day use.
 
-- If your output is large, lower `LUMITRACE_VALUES_MAX`.
+- If your output is large, lower `LUMITRACE_MAX_SAMPLES`.
 - For quick checks on a single file, `enable_git_diff` keeps noise down.

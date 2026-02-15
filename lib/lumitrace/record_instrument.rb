@@ -3,23 +3,7 @@ require "prism"
 
 module Lumitrace
   def self.R(id, value)
-    events_by_id = RecordInstrument.events_by_id
-    entry = events_by_id[id]
-    if entry
-      max = entry.length - 2
-      idx = entry[max]
-      entry[idx] = value
-      entry[max] = (idx + 1) % max
-      entry[max + 1] += 1
-    else
-      max = RecordInstrument.max_values_per_expr
-      entry = Array.new(max + 2)
-      entry[max] = max == 1 ? 0 : 1
-      entry[max + 1] = 1
-      entry[0] = value
-      events_by_id[id] = entry
-    end
-    value
+    raise "Lumitrace.R called before collect mode installation. Call Lumitrace.enable! first."
   end
 
 module RecordInstrument
@@ -247,18 +231,97 @@ module RecordInstrument
   @events_by_id = []
   @loc_by_id = []
   @next_id = 0
-  @max_values_per_expr = 3
+  @max_samples_per_expr = 3
+  @collect_mode = :last
 
-  def self.max_values_per_expr=(n)
-    @max_values_per_expr = n.to_i if n && n.to_i > 0
+  def self.max_samples_per_expr=(n)
+    @max_samples_per_expr = n.to_i if n && n.to_i > 0
   end
 
-  def self.max_values_per_expr
-    @max_values_per_expr
+  def self.max_samples_per_expr
+    @max_samples_per_expr
   end
 
   def self.events_by_id
     @events_by_id
+  end
+
+  def self.collect_mode=(mode)
+    @collect_mode = normalize_collect_mode(mode)
+  end
+
+  def self.collect_mode
+    @collect_mode || :last
+  end
+
+  def self.normalize_collect_mode(mode)
+    m = mode.to_s.strip
+    m = "last" if m.empty?
+    m = m.downcase
+    case m
+    when "last", "types", "history"
+      m.to_sym
+    else
+      raise ArgumentError, "invalid collect mode: #{mode.inspect}"
+    end
+  end
+
+  def self.reset_events!
+    @events_by_id = []
+  end
+
+  def self.record_history(id, value)
+    events_by_id = @events_by_id
+    entry = events_by_id[id]
+    if entry
+      max = history_ring_size(entry)
+      idx = entry[max]
+      entry[idx] = value
+      entry[max] = (idx + 1) % max
+      entry[max + 1] += 1
+      if (types = history_type_set(entry))
+        type = value_type_name(value)
+        types[type] = (types[type] || 0) + 1
+      end
+    else
+      max = @max_samples_per_expr
+      entry = Array.new(max + 3)
+      entry[max] = max == 1 ? 0 : 1
+      entry[max + 1] = 1
+      entry[0] = value
+      entry[max + 2] = { all_value_types: { value_type_name(value) => 1 } }
+      events_by_id[id] = entry
+    end
+    value
+  end
+
+  def self.record_types(id, value)
+    events_by_id = @events_by_id
+    entry = events_by_id[id]
+    if entry
+      entry[:total] += 1
+    else
+      entry = { total: 1, all_value_types: {} }
+      events_by_id[id] = entry
+    end
+    type = value_type_name(value)
+    entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+    value
+  end
+
+  def self.record_last(id, value)
+    events_by_id = @events_by_id
+    entry = events_by_id[id]
+    if entry
+      entry[:last_value] = value
+      entry[:total] += 1
+    else
+      entry = { last_value: value, total: 1, all_value_types: {} }
+      events_by_id[id] = entry
+    end
+    type = value_type_name(value)
+    entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+    value
   end
 
   def self.register_location(file, loc, kind: :expr, name: nil)
@@ -282,23 +345,64 @@ module RecordInstrument
       next unless e
       loc = @loc_by_id[id]
       next unless loc
-      out << {
-        file: loc[:file],
-        start_line: loc[:start_line],
-        start_col: loc[:start_col],
-        end_line: loc[:end_line],
-        end_col: loc[:end_col],
-        kind: loc[:kind].to_s,
-        name: loc[:name],
-        values: values_from_ring(e).map { |v| safe_value(v) },
-        total: e[e.length - 1]
-      }
+      case collect_mode
+      when :history
+        raw_values = values_from_ring(e)
+        all_types = history_type_set(e)
+        if all_types.nil? || all_types.empty?
+          all_types = {}
+          raw_values.each do |v|
+            t = value_type_name(v)
+            all_types[t] = (all_types[t] || 0) + 1
+          end
+        end
+        max = history_ring_size(e)
+        out << {
+          file: loc[:file],
+          start_line: loc[:start_line],
+          start_col: loc[:start_col],
+          end_line: loc[:end_line],
+          end_col: loc[:end_col],
+          kind: loc[:kind].to_s,
+          name: loc[:name],
+          sampled_values: raw_values.map { |v| summarize_value(v, type: value_type_name(v)) },
+          all_value_types: sorted_type_counts(all_types),
+          total: e[max + 1]
+        }
+      when :types
+        out << {
+          file: loc[:file],
+          start_line: loc[:start_line],
+          start_col: loc[:start_col],
+          end_line: loc[:end_line],
+          end_col: loc[:end_col],
+          kind: loc[:kind].to_s,
+          name: loc[:name],
+          all_value_types: sorted_type_counts(e[:all_value_types]),
+          total: e[:total]
+        }
+      else # :last
+        last_raw = e[:last_value]
+        last_type = value_type_name(last_raw)
+        out << {
+          file: loc[:file],
+          start_line: loc[:start_line],
+          start_col: loc[:start_col],
+          end_line: loc[:end_line],
+          end_col: loc[:end_col],
+          kind: loc[:kind].to_s,
+          name: loc[:name],
+          last_value: summarize_value(last_raw, type: last_type),
+          all_value_types: sorted_type_counts(e[:all_value_types]),
+          total: e[:total]
+        }
+      end
     end
     out
   end
 
   def self.values_from_ring(entry)
-    max = entry.length - 2
+    max = history_ring_size(entry)
     idx = entry[max]
     total = entry[max + 1]
     len = total < max ? total : max
@@ -311,6 +415,19 @@ module RecordInstrument
       out << entry[(start + i) % max]
     end
     out
+  end
+
+  def self.history_ring_size(entry)
+    if entry[-1].is_a?(Hash) && entry[-1].key?(:all_value_types)
+      entry.length - 3
+    else
+      entry.length - 2
+    end
+  end
+
+  def self.history_type_set(entry)
+    return nil unless entry[-1].is_a?(Hash)
+    entry[-1][:all_value_types]
   end
 
   def self.dump_json(path = nil)
@@ -329,7 +446,7 @@ module RecordInstrument
     JSON.parse(File.read(path))
   end
 
-  def self.merge_events(events, max_values: nil)
+  def self.merge_events(events, max_samples: nil)
     by_key = {}
     events.each do |e|
       file = e[:file] || e["file"]
@@ -339,9 +456,14 @@ module RecordInstrument
       end_col = e[:end_col] || e["end_col"]
       kind = e[:kind] || e["kind"]
       name = e[:name] || e["name"]
-      values = e[:values] || e["values"] || []
       total = e[:total] || e["total"] || 0
-
+      mode = if e.key?(:sampled_values) || e.key?("sampled_values")
+        :history
+      elsif e.key?(:last_value) || e.key?("last_value")
+        :last
+      else
+        :types
+      end
       key = [file, start_line, start_col, end_line, end_col]
       entry = (by_key[key] ||= {
         file: file,
@@ -351,20 +473,135 @@ module RecordInstrument
         end_col: end_col,
         kind: kind,
         name: name,
-        values: [],
+        mode: mode,
+        sampled_values: [],
+        last_value: nil,
+        all_value_types: {},
         total: 0
       })
 
+      entry[:mode] = mode if entry[:mode] != :history && mode == :history
       entry[:total] += total.to_i
-      entry[:values].concat(values)
-      if max_values && max_values.to_i > 0 && entry[:values].length > max_values.to_i
-        entry[:values] = entry[:values].last(max_values.to_i)
+
+      case mode
+      when :history
+        values = e[:sampled_values] || e["sampled_values"] || []
+        normalized_values = values.map { |v| normalize_last_value(v) }
+        entry[:sampled_values].concat(normalized_values)
+        all_types = normalize_type_counts(e[:all_value_types] || e["all_value_types"])
+        if all_types.empty?
+          normalized_values.each do |v|
+            next unless v
+            t = v[:type] || v["type"]
+            next unless t && !t.to_s.empty?
+            tt = t.to_s
+            entry[:all_value_types][tt] = (entry[:all_value_types][tt] || 0) + 1
+          end
+        else
+          all_types.each { |t, c| entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c }
+        end
+        if max_samples && max_samples.to_i > 0 && entry[:sampled_values].length > max_samples.to_i
+          entry[:sampled_values] = entry[:sampled_values].last(max_samples.to_i)
+        end
+      when :last
+        all_types = normalize_type_counts(e[:all_value_types] || e["all_value_types"])
+        all_types.each { |t, c| entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c }
+        entry[:last_value] = normalize_last_value(e[:last_value] || e["last_value"])
+      else
+        all_types = normalize_type_counts(e[:all_value_types] || e["all_value_types"])
+        all_types.each { |t, c| entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c }
       end
     end
-    by_key.values
+    by_key.values.map do |entry|
+      out = {
+        file: entry[:file],
+        start_line: entry[:start_line],
+        start_col: entry[:start_col],
+        end_line: entry[:end_line],
+        end_col: entry[:end_col],
+        kind: entry[:kind],
+        name: entry[:name],
+        total: entry[:total]
+      }
+      case entry[:mode]
+      when :history
+        out[:sampled_values] = entry[:sampled_values]
+        out[:all_value_types] = sorted_type_counts(entry[:all_value_types])
+      when :last
+        out[:last_value] = entry[:last_value]
+        out[:all_value_types] = sorted_type_counts(entry[:all_value_types])
+      else
+        out[:all_value_types] = sorted_type_counts(entry[:all_value_types])
+      end
+      out
+    end
   end
 
-  def self.merge_child_events(base_events, dir, max_values: nil, logger: nil)
+  def self.normalize_type_counts(types)
+    return {} unless types
+    case types
+    when Hash
+      out = {}
+      types.each do |k, v|
+        key = k.to_s
+        next if key.empty?
+        count = v.to_i
+        count = 1 if count <= 0
+        out[key] = (out[key] || 0) + count
+      end
+      out
+    else
+      arr = types.is_a?(String) ? [types] : Array(types)
+      out = {}
+      arr.each do |t|
+        key = t.to_s
+        next if key.empty?
+        out[key] = (out[key] || 0) + 1
+      end
+      out
+    end
+  end
+
+  def self.sorted_type_counts(types)
+    normalize_type_counts(types).sort_by { |k, _v| k }.to_h
+  end
+
+  def self.normalize_last_value(last_value)
+    return nil unless last_value
+    return summarize_value(last_value) unless last_value.is_a?(Hash)
+
+    fetch = lambda do |key|
+      if last_value.key?(key)
+        last_value[key]
+      elsif last_value.key?(key.to_s)
+        last_value[key.to_s]
+      end
+    end
+
+    raw_value = fetch.call(:value)
+    type = fetch.call(:type)
+    preview = fetch.call(:preview)
+    preview = fetch.call(:inspect) if preview.nil?
+    if preview.nil?
+      if !raw_value.nil?
+        preview = raw_value.inspect
+        type ||= value_type_name(raw_value)
+      else
+        preview = last_value.inspect
+      end
+    end
+    type ||= "Object"
+
+    out = {
+      type: type.to_s,
+      preview: preview.to_s
+    }
+    length = fetch.call(:length)
+    out[:length] = length.to_i if length
+    out
+  end
+
+  def self.merge_child_events(base_events, dir, max_samples: nil, logger: nil)
     return base_events unless dir && Dir.exist?(dir)
     files = Dir.glob(File.join(dir, "child_*.json"))
     return base_events if files.empty?
@@ -385,7 +622,7 @@ module RecordInstrument
         nil
       end
     end
-    merge_events(merged, max_values: max_values)
+    merge_events(merged, max_samples: max_samples)
   end
 
   def self.events
@@ -399,6 +636,29 @@ module RecordInstrument
     else
       s = v.inspect
       s.bytesize > 1000 ? s[0, 1000] + "..." : s
+    end
+  end
+
+  def self.value_type_name(v)
+    name = v.class.name
+    name && !name.empty? ? name : v.class.to_s
+  end
+
+  def self.summarize_value(v, type: nil)
+    type ||= value_type_name(v)
+    preview_limit = 120
+    inspected = v.inspect
+    if inspected.length > preview_limit
+      {
+        type: type,
+        preview: "#{inspected[0, preview_limit]}...",
+        length: inspected.length
+      }
+    else
+      {
+        type: type,
+        preview: inspected
+      }
     end
   end
 

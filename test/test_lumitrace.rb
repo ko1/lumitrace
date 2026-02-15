@@ -35,6 +35,16 @@ class LumiTraceTest < Minitest::Test
       end
     end
   end
+
+  def with_record_instrument_state
+    mod = Lumitrace::RecordInstrument
+    ivars = [:@events_by_id, :@loc_by_id, :@next_id, :@max_samples_per_expr, :@collect_mode]
+    saved = ivars.each_with_object({}) { |ivar, h| h[ivar] = mod.instance_variable_get(ivar) }
+    yield
+  ensure
+    saved.each { |ivar, value| mod.instance_variable_set(ivar, value) } if saved
+  end
+
   def test_namespaces_loaded
     assert defined?(Lumitrace::RecordInstrument)
     assert defined?(Lumitrace::GenerateResultedHtml)
@@ -65,7 +75,7 @@ class LumiTraceTest < Minitest::Test
           "start_col" => 0,
           "end_line" => 1,
           "end_col" => 5,
-          "values" => ["ok"],
+          "sampled_values" => ["ok"],
           "total" => 1
         }
       ]
@@ -76,18 +86,20 @@ class LumiTraceTest < Minitest::Test
       html = Lumitrace::GenerateResultedHtml.render_all(path, root: dir)
       assert_includes html, "Recorded Result View"
       assert_includes html, "sample.rb"
+      assert_includes html, "Mode: history (last 1 sample)"
     end
   end
 
   def test_parse_cli_options_basic
-    argv = ["-t", "--html=/tmp/out.html", "-j", "--max", "7", "--root", "/tmp/root",
+    argv = ["-t", "--html=/tmp/out.html", "-j", "--max-samples", "7", "--collect-mode", "history", "--root", "/tmp/root",
             "--range", "a.rb:1-3,5-6", "--verbose", "file.rb"]
     opts, args, _parser = Lumitrace.parse_cli_options(argv, allow_help: true)
 
     assert_equal true, opts[:text]
     assert_equal "/tmp/out.html", opts[:html]
     assert_equal true, opts[:json]
-    assert_equal 7, opts[:max_values]
+    assert_equal 7, opts[:max_samples]
+    assert_equal "history", opts[:collect_mode]
     assert_equal "/tmp/root", opts[:root]
     assert_equal ["a.rb:1-3,5-6"], opts[:range_specs]
     assert_equal 1, opts[:verbose]
@@ -95,12 +107,13 @@ class LumiTraceTest < Minitest::Test
   end
 
   def test_parse_enable_args_cli_string
-    opts = Lumitrace.parse_enable_args("--text=/tmp/out.txt -h --json=/tmp/out.json --max 5 --root /tmp/root")
+    opts = Lumitrace.parse_enable_args("--text=/tmp/out.txt -h --json=/tmp/out.json --max-samples 5 --collect-mode types --root /tmp/root")
 
     assert_equal "/tmp/out.txt", opts[:text]
     assert_equal true, opts[:html]
     assert_equal "/tmp/out.json", opts[:json]
-    assert_equal 5, opts[:max_values]
+    assert_equal 5, opts[:max_samples]
+    assert_equal "types", opts[:collect_mode]
     assert_equal File.expand_path("/tmp/root"), opts[:root]
   end
 
@@ -132,22 +145,190 @@ class LumiTraceTest < Minitest::Test
     end
   end
 
-  def test_merge_events_applies_max_values
+  def test_merge_events_applies_max_samples
     events = [
-      { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 1, values: [1, 2], total: 2 },
-      { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 1, values: [3, 4], total: 2 }
+      { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 1, sampled_values: [1, 2], total: 2 },
+      { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 1, sampled_values: [3, 4], total: 2 }
     ]
 
-    merged = Lumitrace::RecordInstrument.merge_events(events, max_values: 3)
+    merged = Lumitrace::RecordInstrument.merge_events(events, max_samples: 3)
     assert_equal 1, merged.size
     assert_equal 4, merged[0][:total]
-    assert_equal [2, 3, 4], merged[0][:values]
+    assert_equal ["2", "3", "4"], merged[0][:sampled_values].map { |v| v[:preview] }
+    assert_equal ["Integer", "Integer", "Integer"], merged[0][:sampled_values].map { |v| v[:type] }
+    assert_equal({ "Integer" => 4 }, merged[0][:all_value_types])
+    assert_nil merged[0][:sampled_value_types]
+  end
+
+  def test_events_from_ids_last_mode_outputs_last_value_and_type_set
+    with_record_instrument_state do
+      mod = Lumitrace::RecordInstrument
+      mod.instance_variable_set(:@events_by_id, [])
+      mod.instance_variable_set(:@loc_by_id, [])
+      mod.instance_variable_set(:@next_id, 0)
+      Lumitrace.install_collect_mode("last")
+      mod.max_samples_per_expr = 3
+
+      id = mod.register_location(
+        "a.rb",
+        { start_line: 1, start_col: 0, end_line: 1, end_col: 1 },
+        kind: :expr
+      )
+
+      Lumitrace::R(id, 1)
+      Lumitrace::R(id, nil)
+      Lumitrace::R(id, "x" * 140)
+
+      events = mod.events_from_ids
+      assert_equal 1, events.length
+
+      event = events.first
+      assert_equal({ "Integer" => 1, "NilClass" => 1, "String" => 1 }, event[:all_value_types])
+      assert_equal "String", event[:last_value][:type]
+      assert_equal true, event[:last_value][:length] > 120
+      assert_match(/\A"/, event[:last_value][:preview])
+      refute event[:last_value].key?(:truncated)
+      refute event[:last_value].key?(:head)
+      assert_nil event[:sampled_values]
+    end
+  end
+
+  def test_events_from_ids_history_mode_outputs_sampled_values
+    with_record_instrument_state do
+      mod = Lumitrace::RecordInstrument
+      mod.instance_variable_set(:@events_by_id, [])
+      mod.instance_variable_set(:@loc_by_id, [])
+      mod.instance_variable_set(:@next_id, 0)
+      Lumitrace.install_collect_mode("history")
+      mod.max_samples_per_expr = 3
+
+      id = mod.register_location(
+        "a.rb",
+        { start_line: 1, start_col: 0, end_line: 1, end_col: 1 },
+        kind: :expr
+      )
+
+      Lumitrace::R(id, 1)
+      Lumitrace::R(id, nil)
+      Lumitrace::R(id, "x")
+
+      events = mod.events_from_ids
+      assert_equal 1, events.length
+      event = events.first
+      assert_equal ["1", "nil", "\"x\""], event[:sampled_values].map { |v| v[:preview] }
+      assert_equal ["Integer", "NilClass", "String"], event[:sampled_values].map { |v| v[:type] }
+      assert_equal({ "Integer" => 1, "NilClass" => 1, "String" => 1 }, event[:all_value_types])
+      assert_nil event[:sampled_value_types]
+    end
+  end
+
+  def test_text_comment_value_includes_type
+    events = [
+      {
+        marker: true,
+        kind: "expr",
+        start_col: 0,
+        end_col: 1,
+        sampled_values: [2],
+        total: 1
+      }
+    ]
+
+    comment = Lumitrace::GenerateResultedHtml.comment_value_with_total_for_line(events)
+    assert_equal "2 (Integer)", comment
+  end
+
+  def test_tooltip_summary_values_include_type
+    summary = Lumitrace::GenerateResultedHtml.summarize_values([
+      { type: "Integer", preview: "1" },
+      { type: "NilClass", preview: "nil" }
+    ], 2)
+    assert_includes summary, "#1: 1 (Integer)"
+    assert_includes summary, "#2: nil (NilClass)"
+  end
+
+  def test_tooltip_summary_uses_all_types_when_values_absent
+    summary = Lumitrace::GenerateResultedHtml.summarize_values([], 2, all_types: ["MyObj", "NilClass"])
+    assert_equal "types: MyObj(1), NilClass(1)", summary
+  end
+
+  def test_tooltip_summary_hides_type_counts_when_single_type
+    summary = Lumitrace::GenerateResultedHtml.summarize_values([], 2, all_types: ["MyObj"])
+    assert_equal "", summary
+  end
+
+  def test_render_line_uses_all_types_when_values_absent
+    html = Lumitrace::GenerateResultedHtml.render_line_with_events(
+      "x",
+      [
+        {
+          key_id: "k",
+          start_col: 0,
+          end_col: 1,
+          sampled_values: [],
+          all_value_types: { "MyObj" => 2, "NilClass" => 1 },
+          total: 2,
+          kind: "expr",
+          depth: 1
+        }
+      ]
+    )
+    assert_includes html, "types: MyObj(2), NilClass(1)"
+  end
+
+  def test_comment_value_shows_type_counts_only_when_multiple
+    comment_single = Lumitrace::GenerateResultedHtml.comment_value_with_total_for_line(
+      [
+        {
+          marker: true,
+          kind: "expr",
+          start_col: 0,
+          end_col: 1,
+          sampled_values: [{ type: "Integer", preview: "2" }],
+          all_value_types: { "Integer" => 3 },
+          total: 3
+        }
+      ]
+    )
+    assert_equal "2 (Integer) (3rd run)", comment_single
+
+    comment_multi = Lumitrace::GenerateResultedHtml.comment_value_with_total_for_line(
+      [
+        {
+          marker: true,
+          kind: "expr",
+          start_col: 0,
+          end_col: 1,
+          sampled_values: [{ type: "Integer", preview: "2" }],
+          all_value_types: { "Integer" => 2, "NilClass" => 1 },
+          total: 3
+        }
+      ]
+    )
+    assert_equal "2 (Integer) types: Integer(2), NilClass(1) (3rd run)", comment_multi
+  end
+
+  def test_normalize_events_keeps_sampled_value_objects
+    events = [
+      {
+        "file" => "a.rb",
+        "start_line" => 1,
+        "start_col" => 0,
+        "end_line" => 1,
+        "end_col" => 1,
+        "sampled_values" => [{ "type" => "MyObj", "preview" => "<obj>" }],
+        "total" => 2
+      }
+    ]
+    normalized = Lumitrace::GenerateResultedHtml.normalize_events(events)
+    assert_equal "<obj>", normalized.first[:sampled_values].first["preview"]
   end
 
   def test_env_range_parsing
-    with_env("LUMITRACE_RANGE" => "a.rb:1-3,5-6;b.rb") do
+    with_env("LUMITRACE_RANGE" => "a.rb:1-3,5-6;b.rb", "LUMITRACE_COLLECT_MODE" => "types") do
       env = Lumitrace.resolve_env_options
       assert_equal ["a.rb:1-3,5-6", "b.rb"], env[:range_specs]
+      assert_equal "types", env[:collect_mode]
     end
   end
 
@@ -215,8 +396,8 @@ class LumiTraceTest < Minitest::Test
           sub_value(10)
         RUBY
 
-        Lumitrace.enable!(max_values: 3, at_exit: false)
-        Lumitrace::RecordInstrument.instance_variable_set(:@events_by_key, {})
+        Lumitrace.enable!(max_samples: 3, at_exit: false)
+        Lumitrace::RecordInstrument.reset_events!
 
         load main
 

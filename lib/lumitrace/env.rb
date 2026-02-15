@@ -26,8 +26,9 @@ module Lumitrace
     git_diff_context_env = ENV["LUMITRACE_GIT_DIFF_CONTEXT"]
     git_cmd_env = ENV["LUMITRACE_GIT_CMD"]
     git_diff_untracked_env = parse_env_flag(ENV["LUMITRACE_GIT_DIFF_UNTRACKED"])
-    max_env = ENV["LUMITRACE_VALUES_MAX"]
+    max_env = ENV["LUMITRACE_MAX_SAMPLES"]
     root_env = ENV["LUMITRACE_ROOT"]
+    collect_mode_env = ENV["LUMITRACE_COLLECT_MODE"]
 
     html = html_env.nil? ? false : (html_env != false)
     html_out = html_env.is_a?(String) ? html_env : nil
@@ -60,8 +61,9 @@ module Lumitrace
       git_diff_context: git_diff_context,
       git_cmd: git_cmd_env,
       git_diff_untracked: git_diff_untracked,
-      max_values: max_env,
+      max_samples: max_env,
       root: root_env,
+      collect_mode: collect_mode_env,
       verbose: verbose
     }
   end

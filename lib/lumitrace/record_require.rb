@@ -11,9 +11,9 @@ module RecordRequire
   @ranges_by_file = {}
   @ranges_filtering = false
 
-  def self.enable(max_values: nil, ranges_by_file: nil, root: nil)
+  def self.enable(max_samples: nil, ranges_by_file: nil, root: nil)
     return if @enabled
-    RecordInstrument.max_values_per_expr = max_values if max_values
+    RecordInstrument.max_samples_per_expr = max_samples if max_samples
     if root && !root.to_s.strip.empty?
       @root = File.expand_path(root.to_s)
     else

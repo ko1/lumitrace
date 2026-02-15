@@ -41,7 +41,7 @@ lumitrace -h path/to/entry.rb
 Limit the number of recorded values per expression (defaults to 3):
 
 ```bash
-LUMITRACE_VALUES_MAX=5 lumitrace path/to/entry.rb
+LUMITRACE_MAX_SAMPLES=5 lumitrace path/to/entry.rb
 ```
 
 Write JSON output explicitly:
@@ -83,11 +83,13 @@ require "lumitrace/enable"
 - Text: printed by default; use `--text=PATH` to write to a file.
 - HTML: `lumitrace_recorded.html` by default, or `--html=PATH`.
 - JSON: written only when `--json` (CLI) or `LUMITRACE_JSON` (library/CLI) is provided. Default filename is `lumitrace_recorded.json`.
+- JSON collection mode: `--collect-mode=last|types|history` (default `last`).
 - Fork/exec: merged by default. Child processes write fragments under `LUMITRACE_RESULTS_DIR`.
 
 ## Environment Variables
 
-- `LUMITRACE_VALUES_MAX`: default max values per expression (default 3 if unset).
+- `LUMITRACE_MAX_SAMPLES`: default max samples per expression (default 3 if unset).
+- `LUMITRACE_COLLECT_MODE`: value collection mode (`last`, `types`, `history`; default `last`).
 - `LUMITRACE_ROOT`: root directory used to decide which files are instrumented.
 - `LUMITRACE_TEXT`: control text output. `1` forces text on, `0`/`false` disables. Any other value is treated as the text output path.
 - `LUMITRACE_HTML`: enable HTML output; `1` uses the default path, otherwise treats the value as the HTML output path. `0`/`false` disables.
@@ -105,7 +107,7 @@ require "lumitrace/enable"
 ## Notes And Limitations
 
 - Requires `RubyVM::InstructionSequence.translate` support.
-- Very large projects or hot loops can still generate large HTML; use `LUMITRACE_VALUES_MAX`.
+- Very large projects or hot loops can still generate large HTML; use `LUMITRACE_MAX_SAMPLES`.
 - Instrumentation changes evaluation order for debugging, not for production.
 
 ## Development

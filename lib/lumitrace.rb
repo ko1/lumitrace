@@ -18,6 +18,9 @@ module Lumitrace
   @fork_child = false
   @results_dir = nil
   @results_parent_pid = nil
+  @collect_mode = "last"
+  @collector_module = nil
+  COLLECT_MODES = %w[last types history].freeze
 
   def self.verbose_level
     @verbose_level || 0
@@ -26,6 +29,96 @@ module Lumitrace
   def self.verbose_log(message, level: 1)
     return unless @verbose_level && @verbose_level >= level
     $stderr.puts("[lumitrace] #{message}")
+  end
+
+  def self.normalize_collect_mode(mode)
+    m = mode.to_s.strip
+    m = "last" if m.empty?
+    m = m.downcase
+    raise ArgumentError, "invalid collect mode: #{mode.inspect}" unless COLLECT_MODES.include?(m)
+    m
+  end
+
+  def self.install_collect_mode(mode)
+    normalized = normalize_collect_mode(mode)
+    if @collector_module.nil? || @collect_mode != normalized
+      wrapper = case normalized
+      when "last"
+        Module.new do
+          def R(id, value)
+            events_by_id = RecordInstrument.events_by_id
+            entry = events_by_id[id]
+            klass = value.class
+            type = klass.name
+            type = klass.to_s if type.nil? || type.empty?
+            if entry
+              entry[:last_value] = value
+              entry[:total] += 1
+            else
+              entry = { last_value: value, total: 1, all_value_types: {} }
+              events_by_id[id] = entry
+            end
+            entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+            value
+          end
+        end
+      when "types"
+        Module.new do
+          def R(id, value)
+            events_by_id = RecordInstrument.events_by_id
+            entry = events_by_id[id]
+            klass = value.class
+            type = klass.name
+            type = klass.to_s if type.nil? || type.empty?
+            if entry
+              entry[:total] += 1
+            else
+              entry = { total: 1, all_value_types: {} }
+              events_by_id[id] = entry
+            end
+            entry[:all_value_types][type] = (entry[:all_value_types][type] || 0) + 1
+            value
+          end
+        end
+      else
+        Module.new do
+          def R(id, value)
+            events_by_id = RecordInstrument.events_by_id
+            entry = events_by_id[id]
+            klass = value.class
+            type = klass.name
+            type = klass.to_s if type.nil? || type.empty?
+            if entry
+              max = entry.length - 3
+              idx = entry[max]
+              entry[idx] = value
+              entry[max] = (idx + 1) % max
+              entry[max + 1] += 1
+              meta = entry[max + 2]
+              if meta && (types = meta[:all_value_types])
+                types[type] = (types[type] || 0) + 1
+              else
+                entry[max + 2] = { all_value_types: { type => 1 } }
+              end
+            else
+              max = RecordInstrument.max_samples_per_expr
+              entry = Array.new(max + 3)
+              entry[max] = max == 1 ? 0 : 1
+              entry[max + 1] = 1
+              entry[0] = value
+              entry[max + 2] = { all_value_types: { type => 1 } }
+              events_by_id[id] = entry
+            end
+            value
+          end
+        end
+      end
+      singleton_class.prepend(wrapper)
+      @collector_module = wrapper
+    end
+    @collect_mode = normalized
+    RecordInstrument.collect_mode = normalized
+    normalized
   end
 
   def self.install_fork_hook
@@ -115,14 +208,15 @@ module Lumitrace
     ENV["RUBYOPT"] = updated
   end
 
-  def self.apply_exec_env(effective_text:, effective_html:, effective_json:, effective_max:, effective_root:, effective_verbose:, ranges_by_file:)
+  def self.apply_exec_env(effective_text:, effective_html:, effective_json:, effective_max_samples:, effective_root:, effective_verbose:, effective_collect_mode:, ranges_by_file:)
     ENV["LUMITRACE_TEXT"] = effective_text == true ? "1" : effective_text == false ? "0" : effective_text.to_s
     ENV["LUMITRACE_HTML"] = effective_html == true ? "1" : effective_html == false ? "0" : effective_html.to_s
     ENV["LUMITRACE_JSON"] = effective_json == true ? "1" : effective_json == false ? "0" : effective_json.to_s
-    ENV["LUMITRACE_VALUES_MAX"] = effective_max.to_s if effective_max
+    ENV["LUMITRACE_MAX_SAMPLES"] = effective_max_samples.to_s if effective_max_samples
     ENV["LUMITRACE_ROOT"] = effective_root.to_s if effective_root
     level = effective_verbose.to_i
     ENV["LUMITRACE_VERBOSE"] = level > 0 ? level.to_s : "0"
+    ENV["LUMITRACE_COLLECT_MODE"] = effective_collect_mode.to_s if effective_collect_mode
     if ranges_by_file
       ENV["LUMITRACE_RANGE"] = serialize_ranges_by_file(ranges_by_file)
     end
@@ -165,13 +259,14 @@ module Lumitrace
       html: nil,
       json: nil,
       verbose: nil,
-      max_values: nil,
+      max_samples: nil,
       root: nil,
       range_specs: [],
       git_diff_mode: nil,
       git_diff_context: nil,
       git_cmd: nil,
       git_diff_no_untracked: false,
+      collect_mode: nil,
       help: false
     }
 
@@ -183,7 +278,8 @@ module Lumitrace
       o.on("-h", "--html[=PATH]", "HTML output (default file or PATH)") { |v| opts[:html] = v.nil? || v.empty? ? true : v }
       o.on("-j", "--json[=PATH]", "JSON output (default file or PATH)") { |v| opts[:json] = v.nil? || v.empty? ? true : v }
       o.on("-g", "--git-diff[=MODE]", "Diff ranges (working, staged, base:REV, range:SPEC)") { |v| opts[:git_diff_mode] = v.nil? || v.empty? ? "working" : v }
-      o.on("--max N", Integer, "Max values per expression") { |v| opts[:max_values] = v }
+      o.on("--max-samples N", Integer, "Max samples per expression") { |v| opts[:max_samples] = v }
+      o.on("--collect-mode MODE", "Collect mode: last, types, history") { |v| opts[:collect_mode] = v }
       o.on("--range SPEC", "Range: FILE:1-5,10-12 (repeatable)") { |v| opts[:range_specs] << v }
       o.on("--git-diff-context N", Integer, "Expand diff hunks by +/-N lines") { |v| opts[:git_diff_context] = v }
       o.on("--git-cmd PATH", "Git executable for diff") { |v| opts[:git_cmd] = v }
@@ -241,7 +337,7 @@ module Lumitrace
     )
     opts
   end
-  def self.enable!(max_values: nil, ranges_by_file: nil, root: nil, text: nil, html: nil, json: nil, verbose: nil, at_exit: true)
+  def self.enable!(max_samples: nil, ranges_by_file: nil, root: nil, text: nil, html: nil, json: nil, verbose: nil, collect_mode: nil, at_exit: true)
     require_relative "lumitrace/record_require"
     env = resolve_env_options
 
@@ -262,14 +358,18 @@ module Lumitrace
       text
     end
 
-    effective_max = max_values.nil? ? env[:max_values] : max_values
+    effective_max_samples = max_samples.nil? ? env[:max_samples] : max_samples
     effective_root = root.nil? ? env[:root] : root
     effective_verbose = verbose.nil? ? env[:verbose] : verbose
+    effective_collect_mode = collect_mode.nil? ? (env[:collect_mode] || "last") : collect_mode
+    effective_collect_mode = install_collect_mode(effective_collect_mode)
     effective_verbose = effective_verbose ? effective_verbose.to_i : 0
     @verbose_level = effective_verbose
     @verbose = @verbose_level > 0
-    if (effective_max.nil? || (effective_max.respond_to?(:empty?) && effective_max.empty?)) && effective_text
-      effective_max = 1
+    if effective_collect_mode == "history" &&
+       (effective_max_samples.nil? || (effective_max_samples.respond_to?(:empty?) && effective_max_samples.empty?)) &&
+       effective_text
+      effective_max_samples = 1
     end
 
     if ranges_by_file.nil? && (env[:range_specs].any? || env[:git_diff_mode] || env[:git_diff_context] || env[:git_cmd] || !env[:git_diff_untracked].nil?)
@@ -282,8 +382,8 @@ module Lumitrace
       )
     end
 
-    verbose_log("env: text=#{env[:text]} html=#{env[:html]} json=#{env[:json]} max_values=#{env[:max_values].inspect} root=#{env[:root].inspect}") if @verbose_level > 0
-    RecordRequire.enable(max_values: effective_max, ranges_by_file: ranges_by_file, root: effective_root)
+    verbose_log("env: text=#{env[:text]} html=#{env[:html]} json=#{env[:json]} max_samples=#{env[:max_samples].inspect} root=#{env[:root].inspect} collect_mode=#{env[:collect_mode].inspect}") if @verbose_level > 0
+    RecordRequire.enable(max_samples: effective_max_samples, ranges_by_file: ranges_by_file, root: effective_root)
     resolved_root = effective_root || Dir.pwd
     if at_exit
       setup_results_dir
@@ -292,22 +392,23 @@ module Lumitrace
         effective_text: effective_text,
         effective_html: effective_html,
         effective_json: effective_json,
-        effective_max: effective_max,
+        effective_max_samples: effective_max_samples,
         effective_root: effective_root,
         effective_verbose: effective_verbose,
+        effective_collect_mode: effective_collect_mode,
         ranges_by_file: ranges_by_file
       )
     end
     if ranges_by_file
       total_ranges = ranges_by_file.values.map(&:length).sum
-      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_values=#{effective_max.inspect} root=#{resolved_root} ranges=#{ranges_by_file.size} total=#{total_ranges}")
+      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_samples=#{effective_max_samples.inspect} root=#{resolved_root} collect_mode=#{effective_collect_mode} ranges=#{ranges_by_file.size} total=#{total_ranges}")
       ranges_by_file.keys.sort.each do |path|
         ranges = ranges_by_file[path]
         range_text = ranges.map { |r| r.begin == r.end ? r.begin.to_s : "#{r.begin}-#{r.end}" }.join(", ")
         verbose_log("ranges: #{path}: #{range_text}")
       end
     else
-      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_values=#{effective_max.inspect} root=#{resolved_root} ranges=0")
+      verbose_log("enable: text=#{effective_text} html=#{effective_html} json=#{effective_json} max_samples=#{effective_max_samples.inspect} root=#{resolved_root} collect_mode=#{effective_collect_mode} ranges=0")
     end
     if at_exit
       @atexit_output_root = Dir.pwd
@@ -315,6 +416,8 @@ module Lumitrace
       @atexit_text = effective_text
       @atexit_html = effective_html
       @atexit_json = effective_json
+      @atexit_collect_mode = effective_collect_mode
+      @atexit_max_samples = effective_max_samples
       unless @atexit_registered
         at_exit do
           next unless RecordRequire.enabled?
@@ -331,7 +434,7 @@ module Lumitrace
           events = RecordInstrument.merge_child_events(
             events,
             @results_dir,
-            max_values: effective_max,
+            max_samples: @atexit_max_samples,
             logger: method(:verbose_log)
           )
 
@@ -362,7 +465,9 @@ module Lumitrace
             html = GenerateResultedHtml.render_all_from_events(
               events,
               root: @atexit_output_root,
-              ranges_by_file: @atexit_ranges_by_file
+              ranges_by_file: @atexit_ranges_by_file,
+              collect_mode: @atexit_collect_mode,
+              max_samples: @atexit_max_samples
             )
             out_path = @atexit_html == true ? "lumitrace_recorded.html" : @atexit_html
             out_path = File.expand_path(out_path, @atexit_output_root)
@@ -397,12 +502,13 @@ if enable_env == true
 elsif enable_env.is_a?(String)
   opts = Lumitrace.parse_enable_args(enable_env)
   Lumitrace.enable!(
-    max_values: opts[:max_values],
+    max_samples: opts[:max_samples],
     ranges_by_file: opts[:ranges_by_file],
     root: opts[:root],
     text: opts[:text],
     html: opts[:html],
     json: opts[:json],
-    verbose: opts[:verbose]
+    verbose: opts[:verbose],
+    collect_mode: opts[:collect_mode]
   )
 end

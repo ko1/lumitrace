@@ -35,10 +35,10 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 - `LUMITRACE_ENABLE=1` + `require "lumitrace"` (auto-`enable!`)
 - `LUMITRACE_ENABLE="-t -h -j ..."` + `require "lumitrace"` (CLI-style options parsed and passed to `enable!`)
 
-### `Lumitrace.enable!(max_values: nil, ranges_by_file: nil, root: nil, text: nil, html: nil, json: nil, verbose: nil, at_exit: true)`
+### `Lumitrace.enable!(max_samples: nil, ranges_by_file: nil, root: nil, text: nil, html: nil, json: nil, verbose: nil, at_exit: true)`
 
 - Arguments:
-  - `max_values`: integer, string, or nil.
+  - `max_samples`: integer, string, or nil.
   - `ranges_by_file`: hash or nil. `{ "/path/to/file.rb" => [1..5, 10..12] }`.
   - `text`: boolean or string or nil. When nil, determined from environment variables. When string, uses it as the text output path.
   - `html`: boolean or string or nil. When nil, determined from environment variables.
@@ -52,7 +52,8 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   - Fixes the HTML output directory to the `Dir.pwd` at call time.
 - Root scope for instrumentation uses `root` if provided, otherwise `ENV["LUMITRACE_ROOT"]` if set, otherwise `Dir.pwd`.
 - Environment variables (resolved by `Lumitrace.enable!`):
-  - `LUMITRACE_VALUES_MAX`: default max values per expression when `max_values` is nil (default 3 if unset).
+  - `LUMITRACE_MAX_SAMPLES`: default max samples per expression when `max_samples` is nil (default 3 if unset).
+  - `LUMITRACE_COLLECT_MODE`: value collection mode (`last`, `types`, `history`; default `last`).
   - `LUMITRACE_ROOT`: root directory used to decide which files are instrumented.
   - `LUMITRACE_HTML`: enable HTML output; `1` uses the default path, otherwise treats the value as the HTML output path. `0`/`false` disables.
   - `LUMITRACE_TEXT`: control text output. `1` forces text on, `0`/`false` disables. If unset, text is enabled only when both HTML and JSON are disabled. Any other value is treated as the text output path.
@@ -143,10 +144,11 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 
 - Results are stored per expression key:
   - `id` (an integer assigned at instrumentation time) with a separate `id -> location` table.
-- Keep only the last N values (`max_values_per_expr`, default 3).
+- Collection mode is selected by `collect_mode` (`last`, `types`, `history`; default `last`).
+- In `history` mode, keep only the last N values (`max_samples_per_expr`, default 3).
 - Track `total` count for how many times the expression executed.
-- Values are stored via `inspect` for non-primitive types.
-- String values are rendered via `inspect` and then truncated to 1000 bytes.
+- In `collect_mode=last`, `last_value.preview` is always the `inspect` result string.
+- `last_value.length` is included only when `preview` is truncated.
 - Argument records are stored alongside expression records with `kind: "arg"` and `name` (argument name).
 
 ## Fork/Exec Merge
@@ -159,7 +161,9 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 
 ### Output JSON
 
-`lumitrace_recorded.json` contains an array of entries:
+`lumitrace_recorded.json` contains an array of entries.
+
+`collect_mode=last` (default):
 
 ```json
 {
@@ -170,10 +174,52 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
   "end_col": 20,
   "kind": "expr",
   "name": null,
-  "values": ["..."],
+  "last_value": { "type": "String", "preview": "\"ok\"" },
+  "all_value_types": { "Integer": 10, "NilClass": 2, "String": 111 },
   "total": 123
 }
 ```
+
+`collect_mode=types`:
+
+```json
+{
+  "file": "/path/to/file.rb",
+  "start_line": 10,
+  "start_col": 4,
+  "end_line": 10,
+  "end_col": 20,
+  "kind": "expr",
+  "name": null,
+  "all_value_types": { "Integer": 10, "NilClass": 2, "String": 111 },
+  "total": 123
+}
+```
+
+`collect_mode=history`:
+
+```json
+{
+  "file": "/path/to/file.rb",
+  "start_line": 10,
+  "start_col": 4,
+  "end_line": 10,
+  "end_col": 20,
+  "kind": "expr",
+  "name": null,
+  "sampled_values": [
+    { "type": "Integer", "preview": "42" },
+    { "type": "NilClass", "preview": "nil" },
+    { "type": "String", "preview": "\"ok\"" }
+  ],
+  "all_value_types": { "Integer": 10, "NilClass": 2, "String": 111 },
+  "total": 123
+}
+```
+
+- `last_value`: summary of the last observed value: `{ type, preview }` (+ `length` only when truncated).
+- `all_value_types`: observed Ruby class counts (class name => count).
+- `sampled_values`: retained sample (last N values) of summary objects (`{ type, preview }` + optional `length`) in `history` mode.
 
 ## CLI
 
@@ -189,14 +235,15 @@ lumitrace [options] exec CMD [args...]
 - `-h` enables HTML output (default path). `--html=PATH` writes to a file.
 - `-j` enables JSON output (default path). `--json=PATH` writes to a file.
 - `-g` enables git diff with `working` mode. `--git-diff=MODE` selects `staged|base:REV|range:SPEC`.
-- `--max` sets max values per expression.
+- `--max-samples` sets max samples per expression in `collect_mode=history`.
+- `--collect-mode` sets value collection mode (`last|types|history`).
 - `--range` restricts instrumentation per file (`FILE` or `FILE:1-5,10-12`). Can be repeated.
 - `--git-diff=MODE` restricts instrumentation to diff hunks (`staged|base:REV|range:SPEC`).
 - `--git-diff-context` expands hunks by +/-N lines.
 - `--git-cmd` overrides the git executable.
 - `--git-diff-no-untracked` excludes untracked files (untracked files are included by default).
 - `--verbose[=LEVEL]` prints verbose logs to stderr (level 1-3).
-- `LUMITRACE_VALUES_MAX` sets the default max values per expression.
+- `LUMITRACE_MAX_SAMPLES` sets the default max samples per expression.
 - The CLI launches a child process (Ruby or `exec` target) with `RUBYOPT=-rlumitrace` and `LUMITRACE_*` env vars.
 
 ### Text Output (CLI)
@@ -206,18 +253,23 @@ lumitrace [options] exec CMD [args...]
 - Each line is prefixed with a line number like ` 12| `.
 - Lines where all instrumentable expressions are unexecuted are prefixed with `!`.
 - Skipped ranges are represented by a line containing `...`.
-- Only the last value is shown per expression; if an expression ran multiple times, the last value is annotated with the ordinal run (e.g., `#=> 2 (3rd run)`).
-- When `--text` is used and `--max` is not provided, `max_values` defaults to `1`.
+- Only the last value is shown per expression as `value (Type)`; if an expression ran multiple times, the last value is annotated with the ordinal run (e.g., `#=> 2 (Integer) (3rd run)`).
+- When `collect_mode=history` and `--text` is used with no `--max-samples`, `max_samples` defaults to `1`.
 - When `ranges_by_file` is provided, only files present in the hash are shown in text output.
 - When writing to stdout (`tty: true`), long comments are truncated to the terminal width (using `COLUMNS` or `IO.console.winsize`). File output is not truncated.
 
 ## HTML Rendering
 
 - `GenerateResultedHtml.render_all` renders all files in one page.
+- The page header shows the active collect mode:
+  - `Mode: last (last value)`
+  - `Mode: types (type counts)`
+  - `Mode: history (last N sample[s])`
+  - In `history`, `N` uses configured `max_samples` when available; otherwise it is inferred from the loaded events.
 - Each file is shown in its own section.
 - Expressions are marked with an inline icon (`🔎` for executed, `∅` for not hit).
 - Hovering the icon shows recorded values.
-- Only the last 3 values are shown in the tooltip; additional values are summarized as `... (+N more)`.
+- Only the last 3 values are shown in the tooltip as `value (Type)`; additional values are summarized as `... (+N more)`.
 - Tooltip is scrollable horizontally for long values.
 - When ranges are used, skipped sections are shown as `...` in the line-number column.
 - Lines where all instrumentable expressions are unexecuted are highlighted in a light red. If a line mixes executed and unexecuted expressions, only the unexecuted expressions are highlighted.

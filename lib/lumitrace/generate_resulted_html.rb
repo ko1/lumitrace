@@ -3,7 +3,7 @@ require_relative "record_instrument"
 
 module Lumitrace
 module GenerateResultedHtml
-  def self.render(source_path, events_path, ranges: nil)
+  def self.render(source_path, events_path, ranges: nil, collect_mode: nil, max_samples: nil)
     unless File.exist?(events_path)
       abort "missing #{events_path}"
     end
@@ -12,6 +12,7 @@ module GenerateResultedHtml
     end
 
     raw_events = JSON.parse(File.read(events_path))
+    mode_info = resolve_mode_info(raw_events, collect_mode: collect_mode, max_samples: max_samples)
     events = normalize_events(raw_events)
     events = add_missing_events(events, File.read(source_path), source_path, ranges)
 
@@ -70,7 +71,8 @@ module GenerateResultedHtml
           .line.miss { background: #ffecec; }
           .line.ellipsis { color: #999; }
           .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 8px; }
+          .hint { color: #666; margin-bottom: 4px; }
+          .mode { color: #444; margin-bottom: 8px; }
           .expr { position: relative; display: inline-block; padding-bottom: 1px; }
           .expr.hit { }
           .expr.depth-1 { --hl: #7fbf7f; }
@@ -109,6 +111,7 @@ module GenerateResultedHtml
       </head>
       <body>
         <div class="hint">Hover highlighted text to see recorded values.</div>
+        <div class="mode">#{esc(mode_info[:text])}</div>
         <pre class="code"><code>
       #{html_lines.join("")}
         </code></pre>
@@ -125,13 +128,78 @@ module GenerateResultedHtml
       .gsub('"', "&quot;")
   end
 
-  def self.format_value(v)
-    case v
+  def self.detect_collect_mode(events)
+    arr = Array(events)
+    return "history" if arr.any? { |e| e.key?(:sampled_values) || e.key?("sampled_values") }
+    return "last" if arr.any? { |e| e.key?(:last_value) || e.key?("last_value") }
+    "types"
+  end
+
+  def self.infer_max_samples(events)
+    max = Array(events).map do |e|
+      values = e[:sampled_values] || e["sampled_values"]
+      values.is_a?(Array) ? values.length : nil
+    end.compact.max
+    max && max > 0 ? max : nil
+  end
+
+  def self.resolve_mode_info(events, collect_mode: nil, max_samples: nil)
+    mode = collect_mode.to_s.strip
+    mode = detect_collect_mode(events) if mode.empty?
+    samples = max_samples
+    if mode == "history" && (samples.nil? || samples.to_i <= 0)
+      samples = infer_max_samples(events)
+    end
+    text = case mode
+    when "history"
+      n = samples && samples.to_i > 0 ? samples.to_i : "N"
+      unit = n == 1 ? "sample" : "samples"
+      "Mode: history (last #{n} #{unit})"
+    when "types"
+      "Mode: types (type counts)"
+    else
+      "Mode: last (last value)"
+    end
+    { mode: mode, max_samples: samples, text: text }
+  end
+
+  def self.format_value(v, type: nil)
+    value = case v
     when NilClass
       "nil"
     else
       v.to_s
     end
+    type ||= value_type_name(v)
+    "#{value} (#{type})"
+  end
+
+  def self.type_list_text(types, only_if_multiple: false)
+    counts = normalize_type_counts(types)
+    return nil if only_if_multiple && counts.length <= 1
+    return "(no types)" if counts.empty?
+    text = counts.sort_by { |k, _v| k }.map { |k, v| "#{k}(#{v})" }.join(", ")
+    "types: #{text}"
+  end
+
+  def self.last_value_to_pair(last_value)
+    return [nil, nil] unless last_value
+    return [last_value, nil] unless last_value.is_a?(Hash)
+    type = last_value[:type] || last_value["type"]
+    if last_value.key?(:value) || last_value.key?("value")
+      [last_value[:value] || last_value["value"], type]
+    elsif last_value.key?(:preview) || last_value.key?("preview")
+      [last_value[:preview] || last_value["preview"], type]
+    elsif last_value.key?(:inspect) || last_value.key?("inspect")
+      [last_value[:inspect] || last_value["inspect"], type]
+    else
+      [last_value.inspect, type]
+    end
+  end
+
+  def self.value_type_name(v)
+    name = v.class.name
+    name && !name.empty? ? name : v.class.to_s
   end
 
   def self.render_line_with_events(line_text, events)
@@ -143,7 +211,8 @@ module GenerateResultedHtml
       t = e[:end_col].to_i
       next if t <= s
 
-      values = e[:values]
+      values = e[:sampled_values]
+      all_types = e[:all_value_types]
       total = e[:total]
       label = if e[:kind].to_s == "arg" && e[:name]
         "arg #{e[:name]}"
@@ -153,8 +222,12 @@ module GenerateResultedHtml
       value_text = if total.to_i == 0
         label ? "#{label}: (not hit)" : "(not hit)"
       else
-        summary = summarize_values(values, total)
-        label ? "#{label}: #{summary}" : summary
+        summary = summarize_values(values, total, all_types: all_types)
+        if label
+          summary.empty? ? label : "#{label}: #{summary}"
+        else
+          summary
+        end
       end
       tooltip_html = esc(value_text)
       depth_class = "depth-#{e[:depth]}"
@@ -205,9 +278,18 @@ module GenerateResultedHtml
     best = best_event_for_line(events)
     return nil unless best
 
-    v = best[:values]&.last
+    sampled_last = best[:sampled_values]&.last
+    v, t = last_value_to_pair(sampled_last)
+    all_types = best[:all_value_types]
+    type_text = type_list_text(all_types, only_if_multiple: true)
     total = best[:total]
-    value = format_value(v)
+    value = if best[:sampled_values].nil? || best[:sampled_values].empty?
+      type_text || ""
+    else
+      base = format_value(v, type: t)
+      type_text ? "#{base} #{type_text}" : base
+    end
+    return nil if value.empty?
     if total && total > 1
       "#{value} (#{ordinal(total)} run)"
     else
@@ -244,8 +326,12 @@ module GenerateResultedHtml
     end
   end
 
-  def self.summarize_values(values, total = nil)
-    return "" if values.nil? || values.empty?
+  def self.summarize_values(values, total = nil, all_types: nil)
+    if values.nil? || values.empty?
+      multi = type_list_text(all_types, only_if_multiple: true)
+      return multi if multi
+      return ""
+    end
     total ||= values.length
     last_vals = values.last(3)
     first_index = total - last_vals.length + 1
@@ -254,8 +340,11 @@ module GenerateResultedHtml
     lines << "... (+#{extra} more)" if extra > 0
     last_vals.each_with_index do |v, i|
       idx = first_index + i
-      lines << "##{idx}: #{format_value(v)}"
+      value_text, type_text = last_value_to_pair(v)
+      lines << "##{idx}: #{format_value(value_text, type: type_text)}"
     end
+    multi = type_list_text(all_types, only_if_multiple: true)
+    lines << multi if multi
     lines.join("\n")
   end
 
@@ -299,7 +388,8 @@ module GenerateResultedHtml
         marker: marker,
         kind: e[:kind],
         name: e[:name],
-        values: e[:values],
+        sampled_values: e[:sampled_values],
+        all_value_types: e[:all_value_types],
         total: e[:total]
       }
     end
@@ -344,15 +434,53 @@ module GenerateResultedHtml
         end_col: key[4],
         kind: kind,
         name: name,
-        values: [],
+        sampled_values: [],
+        all_value_types: {},
         total: 0
       })
 
-      vals = e["values"] || e[:values] || [e["value"] || e[:value]].compact
-      entry[:values].concat(vals)
+      vals = e["sampled_values"] || e[:sampled_values] || []
+      entry[:sampled_values].concat(vals)
+      normalize_type_counts(e["all_value_types"] || e[:all_value_types]).each do |t, c|
+        entry[:all_value_types][t] = (entry[:all_value_types][t] || 0) + c
+      end
+      if vals.empty?
+        last_value = e["last_value"] || e[:last_value]
+        entry[:sampled_values] << last_value if last_value
+      end
       entry[:total] += (e["total"] || e[:total] || vals.length)
     end
+    merged.each_value { |v| v[:all_value_types] = sorted_type_counts(v[:all_value_types]) }
     merged.values
+  end
+
+  def self.normalize_type_counts(types)
+    return {} unless types
+    case types
+    when Hash
+      out = {}
+      types.each do |k, v|
+        key = k.to_s
+        next if key.empty?
+        count = v.to_i
+        count = 1 if count <= 0
+        out[key] = (out[key] || 0) + count
+      end
+      out
+    else
+      arr = types.is_a?(String) ? [types] : Array(types)
+      out = {}
+      arr.each do |t|
+        key = t.to_s
+        next if key.empty?
+        out[key] = (out[key] || 0) + 1
+      end
+      out
+    end
+  end
+
+  def self.sorted_type_counts(types)
+    normalize_type_counts(types).sort_by { |k, _v| k }.to_h
   end
 
   def self.normalize_ranges(ranges)
@@ -400,7 +528,8 @@ module GenerateResultedHtml
           end_col: key[4],
           kind: loc[:kind],
           name: loc[:name],
-          values: [],
+          sampled_values: [],
+          all_value_types: {},
           total: 0
         }
         existing[key] = true
@@ -431,13 +560,13 @@ module GenerateResultedHtml
     [expected_by_line, executed_by_line]
   end
 
-  def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil)
+  def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil)
     raw_events = JSON.parse(File.read(events_path))
-    events = normalize_events(raw_events)
-    render_all_from_events(events, root: root, ranges_by_file: ranges_by_file)
+    render_all_from_events(raw_events, root: root, ranges_by_file: ranges_by_file, collect_mode: collect_mode, max_samples: max_samples)
   end
 
-  def self.render_all_from_events(events, root: Dir.pwd, ranges_by_file: nil)
+  def self.render_all_from_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil)
+    mode_info = resolve_mode_info(events, collect_mode: collect_mode, max_samples: max_samples)
     events = normalize_events(events)
     by_file = events.group_by { |e| e[:file] }
     ranges_by_file = normalize_ranges_by_file(ranges_by_file)
@@ -514,7 +643,8 @@ module GenerateResultedHtml
           .line.miss { background: #ffecec; }
           .line.ellipsis { color: #999; }
           .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 8px; }
+          .hint { color: #666; margin-bottom: 4px; }
+          .mode { color: #444; margin-bottom: 8px; }
           .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
           .expr { position: relative; display: inline-block; padding-bottom: 1px; }
           .expr.hit { }
@@ -554,6 +684,7 @@ module GenerateResultedHtml
       </head>
       <body>
         <div class="hint">Hover highlighted text to see recorded values.</div>
+        <div class="mode">#{esc(mode_info[:text])}</div>
         #{sections}
         <script>
           (function() {
@@ -583,7 +714,8 @@ module GenerateResultedHtml
     HTML
   end
 
-  def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil)
+  def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil)
+    mode_info = resolve_mode_info(events, collect_mode: collect_mode, max_samples: max_samples)
     events = normalize_events(events)
     ranges = normalize_ranges(ranges)
     target_events = add_missing_events(events.select { |e| e[:file] == filename }, source, filename, ranges)
@@ -639,7 +771,8 @@ module GenerateResultedHtml
           .line.miss { background: #ffecec; }
           .line.ellipsis { color: #999; }
           .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 8px; }
+          .hint { color: #666; margin-bottom: 4px; }
+          .mode { color: #444; margin-bottom: 8px; }
           .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
           .expr { position: relative; display: inline-block; padding-bottom: 1px; }
           .expr.hit { }
@@ -679,6 +812,7 @@ module GenerateResultedHtml
       </head>
       <body>
         <div class="hint">Hover highlighted text to see recorded values.</div>
+        <div class="mode">#{esc(mode_info[:text])}</div>
         <h2 class="file">#{esc(filename)}</h2>
         <pre class="code"><code>
       #{html_lines.join("")}
