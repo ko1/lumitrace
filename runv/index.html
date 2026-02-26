@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LumiTrace Playground</title>
-  <meta name="description" content="Run Ruby in the browser and see traced values inline with lumitrace 0.4.1.">
+  <meta name="description" content="Run Ruby in the browser and see traced values inline with lumitrace 0.4.2.">
   <meta property="og:title" content="LumiTrace Playground">
-  <meta property="og:description" content="Run Ruby in the browser and see traced values inline with lumitrace 0.4.1.">
+  <meta property="og:description" content="Run Ruby in the browser and see traced values inline with lumitrace 0.4.2.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://github.com/ko1/lumitrace/tree/master/runv">
   <meta property="og:see_also" content="https://github.com/ko1/lumitrace/tree/master/runv">
@@ -290,7 +290,7 @@
   <header>
     <div>
       <h1>LumiTrace Playground</h1>
-      <p class="sub">Run Ruby in the browser and see traced values inline with lumitrace 0.4.1.</p>
+      <p class="sub">Run Ruby in the browser and see traced values inline with lumitrace 0.4.2.</p>
     </div>
   </header>
 
@@ -448,6 +448,8 @@ module Lumitrace
   end
 
 module RecordInstrument
+  IDENTIFIER_METHOD_NAME_RE = /\A[a-z_]\w*[!?=]?\z/.freeze
+
   SKIP_NODE_CLASSES = [
     Prism::DefNode,
     Prism::ClassNode,
@@ -488,7 +490,7 @@ module RecordInstrument
     Prism::GlobalVariableReadNode
   ].freeze
 
-  def self.instrument_source(src, ranges, file_label: nil, record_method: "Lumitrace::R")
+  def self.instrument_source(src, ranges, file_label: nil, record_method: "::Lumitrace::R")
     file_label ||= "(unknown)"
     ranges = normalize_ranges(ranges)
 
@@ -540,7 +542,7 @@ module RecordInstrument
         end
       end
 
-      node.child_nodes.each { |child| stack << [child, node] }
+      instrumentable_child_nodes(node).each { |child| stack << [child, node] }
     end
     locs
   end
@@ -577,7 +579,7 @@ module RecordInstrument
         end
       end
 
-      node.child_nodes.each { |child| stack << [child, node] }
+      instrumentable_child_nodes(node).each { |child| stack << [child, node] }
     end
 
     inserts
@@ -618,6 +620,7 @@ module RecordInstrument
   def self.wrap_expr?(node, parent = nil)
     return false unless node.respond_to?(:location)
     return false if literal_value_node?(node)
+    return false if command_style_call_node?(node)
     if parent.is_a?(Prism::AliasGlobalVariableNode) || parent.is_a?(Prism::AliasMethodNode)
       return false
     end
@@ -635,6 +638,26 @@ module RecordInstrument
       return false
     end
     WRAP_NODE_CLASSES.include?(node.class)
+  end
+
+  def self.command_style_call_node?(node)
+    return false unless node.is_a?(Prism::CallNode)
+    return false unless node.respond_to?(:arguments) && node.arguments
+    return false if node.respond_to?(:opening_loc) && node.opening_loc
+
+    name = node.respond_to?(:name) ? node.name : nil
+    return false unless name
+
+    IDENTIFIER_METHOD_NAME_RE.match?(name.to_s)
+  end
+
+  def self.instrumentable_child_nodes(node)
+    return [] unless node
+    if command_style_call_node?(node) && node.respond_to?(:block) && node.block
+      [node.block]
+    else
+      node.child_nodes
+    end
   end
 
   def self.expr_location(node)
@@ -1292,6 +1315,8 @@ require "json"
 
 module Lumitrace
 module GenerateResultedHtml
+  RENDERER_JS_PATH = File.expand_path("generate_resulted_html_renderer.js", __dir__)
+
   def self.render(source_path, events_path, ranges: nil, collect_mode: nil, max_samples: nil)
     unless File.exist?(events_path)
       abort "missing #{events_path}"
@@ -1301,112 +1326,26 @@ module GenerateResultedHtml
     end
 
     raw_events = JSON.parse(File.read(events_path))
-    mode_info = resolve_mode_info(raw_events, collect_mode: collect_mode, max_samples: max_samples)
-    events = normalize_events(raw_events)
-    events = add_missing_events(events, File.read(source_path), source_path, ranges)
-
     src = File.read(source_path)
-    src_lines = src.lines
-    ranges = normalize_ranges(ranges)
-    expected_by_line, executed_by_line = line_stats(src, ranges, events, source_path)
+    mode_info = resolve_mode_info(raw_events, collect_mode: collect_mode, max_samples: max_samples)
+    normalized_ranges = normalize_ranges(ranges)
+    events = normalize_events(raw_events).select { |e| e[:file] == source_path }
+    events = add_missing_events(events, src, source_path, normalized_ranges)
 
-    html_lines = []
-    prev_lineno = nil
-    first_lineno = nil
-    last_lineno = nil
-    src_lines.each_with_index do |line, idx|
-      lineno = idx + 1
-      next if ranges && !line_in_ranges?(lineno, ranges)
-      first_lineno ||= lineno
-      if prev_lineno && lineno > prev_lineno + 1
-        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-      end
-      line_text = line.chomp
-      evs = aggregate_events_for_line(events, lineno, line_text.length)
-      expected = expected_by_line[lineno]
-      executed = executed_by_line[lineno]
-      line_class = line_class_for(expected, executed)
-      if expected > 0 && executed == 0
-        evs.each { |e| e[:suppress_miss] = true }
-      end
-      if evs.empty?
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
-      else
-        rendered = render_line_with_events(line_text, evs)
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
-      end
-      prev_lineno = lineno
-      last_lineno = lineno
-    end
-    if first_lineno && first_lineno > 1
-      html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
-    end
-    if last_lineno && last_lineno < src_lines.length
-      html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-    end
+    payload = build_html_payload(
+      mode_info: mode_info,
+      files: [
+        build_html_payload_file(
+          path: source_path,
+          display_path: File.basename(source_path),
+          source: src,
+          ranges: normalized_ranges,
+          trace_events: events
+        )
+      ]
+    )
 
-    <<~HTML
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Recorded Result View</title>
-        <style>
-          body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
-          .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
-          .line:hover { background: #fff2c6; }
-          .line.hit { background: #f0ffe7; }
-          .line.miss { background: #ffecec; }
-          .line.ellipsis { color: #999; }
-          .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 4px; }
-          .mode { color: #444; margin-bottom: 8px; }
-          .expr { position: relative; display: inline-block; padding-bottom: 1px; }
-          .expr.hit { }
-          .expr.depth-1 { --hl: #7fbf7f; }
-          .expr.depth-2 { --hl: #6fa8ff; }
-          .expr.depth-3 { --hl: #ffb347; }
-          .expr.depth-4 { --hl: #d78bff; }
-          .expr.depth-5 { --hl: #ff6f91; }
-          .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
-          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
-          .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
-          .marker.miss { color: #c07070; }
-          .marker.arg { color: #2f6f8e; }
-          .marker .tooltip {
-            display: none;
-            position: absolute;
-            left: 0;
-            top: 100%;
-            margin-top: 4px;
-            background: #2b2b2b;
-            color: #fff;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            white-space: pre;
-            min-width: 16ch;
-            max-width: 90vw;
-            overflow-x: auto;
-            overflow-y: hidden;
-            z-index: 10;
-            pointer-events: auto;
-          }
-          .marker:hover .tooltip,
-          .marker:focus-within .tooltip,
-          .marker .tooltip:hover { display: block; }
-        </style>
-      </head>
-      <body>
-        <div class="hint">Hover highlighted text to see recorded values.</div>
-        <div class="mode">#{esc(mode_info[:text])}</div>
-        <pre class="code"><code>
-      #{html_lines.join("")}
-        </code></pre>
-      </body>
-      </html>
-    HTML
+    render_payload_html(payload)
   end
 
   def self.esc(s)
@@ -1415,6 +1354,566 @@ module GenerateResultedHtml
       .gsub("<", "&lt;")
       .gsub(">", "&gt;")
       .gsub('"', "&quot;")
+  end
+
+  def self.build_html_payload(mode_info:, files:)
+    {
+      version: 1,
+      meta: {
+        mode: mode_info[:mode],
+        mode_text: mode_info[:text],
+        max_samples: mode_info[:max_samples]
+      },
+      files: files
+    }
+  end
+
+  def self.build_html_payload_file(path:, display_path:, source:, ranges:, trace_events:)
+    sorted_events = Array(trace_events).sort_by do |e|
+      [e[:start_line].to_i, e[:start_col].to_i, e[:end_line].to_i, e[:end_col].to_i]
+    end
+
+    {
+      path: path,
+      display_path: display_path,
+      source: source,
+      ranges: ranges,
+      trace: sorted_events.map { |e| event_to_html_trace_payload(e) }
+    }
+  end
+
+  def self.event_to_html_trace_payload(e)
+    {
+      location: [
+        e[:start_line].to_i,
+        e[:start_col].to_i,
+        e[:end_line].to_i,
+        e[:end_col].to_i
+      ],
+      kind: (e[:kind] || "expr").to_s,
+      name: e[:name],
+      sampled_values: e[:sampled_values] || [],
+      types: sorted_type_counts(e[:types]),
+      total: e[:total].to_i
+    }
+  end
+
+  def self.payload_json_for_script(payload)
+    JSON.generate(payload)
+      .gsub("</", "<\\/")
+      .gsub("\u2028", "\\u2028")
+      .gsub("\u2029", "\\u2029")
+  end
+
+  def self.html_renderer_js
+  @html_renderer_js ||= '(function() {
+  const payloadEl = document.getElementById("lumitrace-payload");
+  const app = document.getElementById("lumitrace-app");
+  if (!payloadEl || !app) return;
+
+  const SL = 0;
+  const SC = 1;
+  const EL = 2;
+  const EC = 3;
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\\"/g, "&quot;");
+  }
+
+  function normalizeTypeCounts(types) {
+    if (!types) return {};
+    if (Array.isArray(types)) {
+      const out = {};
+      for (const t of types) {
+        const key = String(t || "");
+        if (!key) continue;
+        out[key] = (out[key] || 0) + 1;
+      }
+      return out;
+    }
+    if (typeof types === "object") {
+      const out = {};
+      for (const [k, v] of Object.entries(types)) {
+        const key = String(k || "");
+        if (!key) continue;
+        let count = Number(v) || 0;
+        if (count <= 0) count = 1;
+        out[key] = (out[key] || 0) + count;
+      }
+      return out;
+    }
+    const key = String(types || "");
+    return key ? { [key]: 1 } : {};
+  }
+
+  function typeListText(types, onlyIfMultiple) {
+    const counts = normalizeTypeCounts(types);
+    const entries = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b));
+    if (onlyIfMultiple && entries.length <= 1) return null;
+    if (entries.length === 0) return "(no types)";
+    return "types: " + entries.map(([k, v]) => `${k}(${v})`).join(", ");
+  }
+
+  function valueTypeName(v) {
+    if (v === null) return "NilClass";
+    if (Array.isArray(v)) return "Array";
+    switch (typeof v) {
+      case "number": return Number.isInteger(v) ? "Integer" : "Float";
+      case "string": return "String";
+      case "boolean": return "Boolean";
+      case "undefined": return "NilClass";
+      case "object": return "Object";
+      default: return typeof v;
+    }
+  }
+
+  function formatValue(v, type) {
+    const value = v == null ? "nil" : String(v);
+    return `${value} (${type || valueTypeName(v)})`;
+  }
+
+  function lastValueToPair(lastValue) {
+    if (lastValue == null) return [null, null];
+    if (typeof lastValue !== "object" || Array.isArray(lastValue)) return [lastValue, null];
+    const type = lastValue.type || null;
+    if (Object.prototype.hasOwnProperty.call(lastValue, "value")) return [lastValue.value, type];
+    if (Object.prototype.hasOwnProperty.call(lastValue, "preview")) return [lastValue.preview, type];
+    if (Object.prototype.hasOwnProperty.call(lastValue, "inspect")) return [lastValue.inspect, type];
+    return [JSON.stringify(lastValue), type];
+  }
+
+  function summarizeValues(values, total, allTypes) {
+    if (!values || values.length === 0) {
+      const multi = typeListText(allTypes, false);
+      return multi || "";
+    }
+
+    const n = total == null ? values.length : Number(total);
+    const lastVals = values.slice(-3);
+    const firstIndex = n - lastVals.length + 1;
+    const lines = [];
+    const extra = n - lastVals.length;
+    if (extra > 0) lines.push(`... (+${extra} more)`);
+
+    lastVals.forEach((v, i) => {
+      const idx = firstIndex + i;
+      const [valueText, typeText] = lastValueToPair(v);
+      lines.push(`#${idx}: ${formatValue(valueText, typeText)}`);
+    });
+
+    const multi = typeListText(allTypes, true);
+    if (multi) lines.push(multi);
+    return lines.join("\\n");
+  }
+
+  function lineClassFor(expected, executed) {
+    if (executed > 0) return " hit";
+    if (expected > 0) return " miss";
+    return "";
+  }
+
+  function lineInRanges(line, ranges) {
+    if (!ranges || ranges.length === 0) return true;
+    return ranges.some((range) => {
+      if (!Array.isArray(range) || range.length < 2) return false;
+      const start = Number(range[0]);
+      const end = Number(range[1]);
+      return line >= start && line <= end;
+    });
+  }
+
+  function sourceLines(source) {
+    const matches = String(source || "").match(/[^\\n]*\\n|[^\\n]+/g);
+    if (!matches) return [];
+    return matches.map((line) => line.endsWith("\\n") ? line.slice(0, -1) : line);
+  }
+
+  function lineStatsForFile(trace) {
+    const expectedByLine = Object.create(null);
+    const executedByLine = Object.create(null);
+    const seen = Object.create(null);
+
+    for (const event of trace || []) {
+      const loc = event && event.location;
+      if (!Array.isArray(loc) || loc.length < 4) continue;
+      const sl = Number(loc[SL]);
+      const el = Number(loc[EL]);
+      if (!(sl > 0) || !(el > 0)) continue;
+      const key = `${sl}:${loc[SC]}:${el}:${loc[EC]}`;
+      if (seen[key]) continue;
+      seen[key] = true;
+      for (let line = sl; line <= el; line += 1) {
+        expectedByLine[line] = (expectedByLine[line] || 0) + 1;
+        if (Number(event.total) > 0) {
+          executedByLine[line] = (executedByLine[line] || 0) + 1;
+        }
+      }
+    }
+
+    return { expectedByLine, executedByLine };
+  }
+
+  function aggregateEventsForLine(trace, lineno, lineLen, fileIndex) {
+    const buckets = new Map();
+    const spans = [];
+
+    for (const event of trace || []) {
+      const loc = event && event.location;
+      if (!Array.isArray(loc) || loc.length < 4) continue;
+      const sline = Number(loc[SL]);
+      const scol = Number(loc[SC]);
+      const eline = Number(loc[EL]);
+      const ecol = Number(loc[EC]);
+      if (lineno < sline || lineno > eline) continue;
+
+      let s;
+      let t;
+      let marker;
+      if (sline === eline) {
+        s = scol;
+        t = ecol;
+        marker = true;
+      } else if (lineno === sline) {
+        s = scol;
+        t = lineLen;
+        marker = false;
+      } else if (lineno === eline) {
+        s = 0;
+        t = ecol;
+        marker = true;
+      } else {
+        s = 0;
+        t = lineLen;
+        marker = false;
+      }
+
+      if (!(t > s)) continue;
+      spans.push({ start_col: s, end_col: t });
+
+      const keyId = `${fileIndex}:${sline}:${scol}:${eline}:${ecol}`;
+      buckets.set(keyId, {
+        key_id: keyId,
+        start_col: s,
+        end_col: t,
+        marker,
+        kind: event.kind || "expr",
+        name: event.name || null,
+        sampled_values: event.sampled_values || [],
+        types: event.types || {},
+        total: Number(event.total) || 0,
+        suppress_miss: false
+      });
+    }
+
+    const out = Array.from(buckets.values());
+    for (const b of out) {
+      const depth = spans.filter((sp) => b.start_col >= sp.start_col && b.end_col <= sp.end_col).length;
+      b.depth = Math.min(5, Math.max(1, depth));
+    }
+    out.sort((a, b) => a.start_col - b.start_col);
+    return out;
+  }
+
+  function renderLineHtml(lineText, events) {
+    const opens = Object.create(null);
+    const closes = Object.create(null);
+
+    for (const e of events) {
+      const s = Number(e.start_col);
+      const t = Number(e.end_col);
+      if (!(t > s)) continue;
+
+      const values = e.sampled_values || [];
+      const allTypes = e.types || {};
+      const total = Number(e.total) || 0;
+      const label = e.kind === "arg" && e.name ? `arg ${e.name}` : null;
+
+      let valueText;
+      if (total === 0) {
+        valueText = label ? `${label}: (not hit)` : "(not hit)";
+      } else {
+        const summary = summarizeValues(values, total, allTypes);
+        if (label) {
+          valueText = summary ? `${label}: ${summary}` : label;
+        } else {
+          valueText = summary;
+        }
+      }
+
+      const tooltipHtml = escHtml(valueText);
+      const depthClass = `depth-${e.depth || 1}`;
+      const missClass = total === 0 && !e.suppress_miss ? " miss" : "";
+      const keyAttr = escHtml(e.key_id || "");
+      const openTag = `<span class=\\"expr hit ${depthClass}${missClass}\\" data-key=\\"${keyAttr}\\">`;
+
+      let closeTag = "</span>";
+      if (e.marker !== false) {
+        let marker = "🔎";
+        if (total === 0) marker = "∅";
+        else if (e.kind === "arg") marker = "🧷";
+
+        let markerClass = "marker";
+        if (total === 0 && !e.suppress_miss) markerClass = "marker miss";
+        if (e.kind === "arg") markerClass += " arg";
+        closeTag = `<span class=\\"${markerClass}\\" data-key=\\"${keyAttr}\\" aria-hidden=\\"true\\">${marker}<span class=\\"tooltip\\">${tooltipHtml}</span></span></span>`;
+      }
+
+      const len = t - s;
+      (opens[s] ||= []).push({ len, start: s, end: t, tag: openTag });
+      (closes[t] ||= []).push({ len, start: s, end: t, tag: closeTag });
+    }
+
+    const positions = Array.from(new Set([
+      ...Object.keys(opens).map(Number),
+      ...Object.keys(closes).map(Number)
+    ])).sort((a, b) => a - b);
+
+    let out = "";
+    let cursor = 0;
+
+    for (const pos of positions) {
+      if (pos > cursor) out += escHtml(lineText.slice(cursor, pos));
+      if (closes[pos]) {
+        closes[pos]
+          .slice()
+          .sort((a, b) => (b.start - a.start) || (a.len - b.len))
+          .forEach((c) => { out += c.tag; });
+      }
+      if (opens[pos]) {
+        opens[pos]
+          .slice()
+          .sort((a, b) => b.end - a.end)
+          .forEach((o) => { out += o.tag; });
+      }
+      cursor = pos;
+    }
+
+    if (cursor < lineText.length) out += escHtml(lineText.slice(cursor));
+    return out;
+  }
+
+  function buildLineNode(lineno, lineText, lineClass, innerHtml) {
+    const line = document.createElement("span");
+    line.className = `line${lineClass}`;
+    line.dataset.line = String(lineno);
+
+    const ln = document.createElement("span");
+    ln.className = "ln";
+    ln.textContent = String(lineno);
+    line.appendChild(ln);
+    line.appendChild(document.createTextNode(" "));
+
+    if (innerHtml == null) {
+      line.appendChild(document.createTextNode(lineText));
+    } else {
+      const wrapper = document.createElement("span");
+      wrapper.innerHTML = innerHtml;
+      while (wrapper.firstChild) line.appendChild(wrapper.firstChild);
+    }
+
+    return line;
+  }
+
+  function buildEllipsisNode() {
+    const line = document.createElement("span");
+    line.className = "line ellipsis";
+    line.dataset.line = "...";
+
+    const ln = document.createElement("span");
+    ln.className = "ln";
+    ln.textContent = "...";
+    line.appendChild(ln);
+    return line;
+  }
+
+  function renderFileSection(file, fileIndex) {
+    const section = document.createDocumentFragment();
+    const h2 = document.createElement("h2");
+    h2.className = "file";
+    h2.textContent = file.display_path || file.path || `file-${fileIndex + 1}`;
+    section.appendChild(h2);
+
+    const pre = document.createElement("pre");
+    pre.className = "code";
+    const code = document.createElement("code");
+    pre.appendChild(code);
+
+    const lines = sourceLines(file.source || "");
+    const ranges = Array.isArray(file.ranges) ? file.ranges : null;
+    const trace = Array.isArray(file.trace) ? file.trace : [];
+    const { expectedByLine, executedByLine } = lineStatsForFile(trace);
+
+    let prevLineno = null;
+    let firstLineno = null;
+    let lastLineno = null;
+
+    lines.forEach((lineText, idx) => {
+      const lineno = idx + 1;
+      if (!lineInRanges(lineno, ranges)) return;
+      if (firstLineno == null) firstLineno = lineno;
+      if (prevLineno != null && lineno > prevLineno + 1) {
+        code.appendChild(buildEllipsisNode());
+      }
+
+      const evs = aggregateEventsForLine(trace, lineno, lineText.length, fileIndex);
+      const expected = expectedByLine[lineno] || 0;
+      const executed = executedByLine[lineno] || 0;
+      const lineClass = lineClassFor(expected, executed);
+      if (expected > 0 && executed === 0) {
+        evs.forEach((e) => { e.suppress_miss = true; });
+      }
+
+      if (evs.length === 0) {
+        code.appendChild(buildLineNode(lineno, lineText, lineClass, null));
+      } else {
+        code.appendChild(buildLineNode(lineno, lineText, lineClass, renderLineHtml(lineText, evs)));
+      }
+
+      prevLineno = lineno;
+      lastLineno = lineno;
+    });
+
+    if (firstLineno != null && firstLineno > 1) {
+      code.insertBefore(buildEllipsisNode(), code.firstChild);
+    }
+    if (lastLineno != null && lastLineno < lines.length) {
+      code.appendChild(buildEllipsisNode());
+    }
+
+    section.appendChild(pre);
+    return section;
+  }
+
+  function bindMarkerHover(root) {
+    root.querySelectorAll(".marker").forEach((marker) => {
+      marker.addEventListener("mouseenter", () => {
+        root.querySelectorAll(".expr.active").forEach((el) => el.classList.remove("active"));
+        const key = marker.dataset.key;
+        if (key) {
+          root.querySelectorAll(`.expr[data-key=\\"${key}\\"]`).forEach((el) => el.classList.add("active"));
+        } else {
+          const expr = marker.closest(".expr");
+          if (expr) expr.classList.add("active");
+        }
+      });
+      marker.addEventListener("mouseleave", () => {
+        const key = marker.dataset.key;
+        if (key) {
+          root.querySelectorAll(`.expr[data-key=\\"${key}\\"]`).forEach((el) => el.classList.remove("active"));
+        } else {
+          const expr = marker.closest(".expr");
+          if (expr) expr.classList.remove("active");
+        }
+      });
+    });
+  }
+
+  function render(payload) {
+    app.textContent = "";
+
+    const hint = document.createElement("div");
+    hint.className = "hint";
+    hint.textContent = "Hover highlighted text to see recorded values.";
+    app.appendChild(hint);
+
+    const mode = document.createElement("div");
+    mode.className = "mode";
+    mode.textContent = payload && payload.meta && payload.meta.mode_text ? payload.meta.mode_text : "";
+    app.appendChild(mode);
+
+    const files = payload && Array.isArray(payload.files) ? payload.files : [];
+    files.forEach((file, idx) => {
+      app.appendChild(renderFileSection(file, idx));
+    });
+
+    bindMarkerHover(app);
+  }
+
+  try {
+    const payload = JSON.parse(payloadEl.textContent || "{}");
+    render(payload);
+  } catch (error) {
+    app.textContent = `Failed to render Lumitrace HTML: ${error}`;
+  }
+})();'
+end
+
+  def self.html_report_styles
+    <<~CSS
+      body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
+      .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
+      .line { display: block; box-sizing: border-box; padding: 2px 8px; }
+      .line:hover { background: #fff2c6; }
+      .line.hit { background: #f0ffe7; }
+      .line.miss { background: #ffecec; }
+      .line.ellipsis { color: #999; }
+      .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
+      .hint { color: #666; margin-bottom: 4px; }
+      .mode { color: #444; margin-bottom: 8px; }
+      .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
+      .expr { position: relative; display: inline-block; padding-bottom: 1px; }
+      .expr.hit { }
+      .expr.depth-1 { --hl: #7fbf7f; }
+      .expr.depth-2 { --hl: #6fa8ff; }
+      .expr.depth-3 { --hl: #ffb347; }
+      .expr.depth-4 { --hl: #d78bff; }
+      .expr.depth-5 { --hl: #ff6f91; }
+      .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
+      .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
+      .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+      .marker.miss { color: #c07070; }
+      .marker.arg { color: #2f6f8e; }
+      .marker .tooltip {
+        display: none;
+        position: absolute;
+        left: 0;
+        top: 100%;
+        margin-top: 4px;
+        background: #2b2b2b;
+        color: #fff;
+        padding: 4px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: pre;
+        min-width: 16ch;
+        max-width: 90vw;
+        overflow-x: auto;
+        overflow-y: hidden;
+        z-index: 10;
+        pointer-events: auto;
+      }
+      .marker:hover .tooltip,
+      .marker:focus-within .tooltip,
+      .marker .tooltip:hover { display: block; }
+      .noscript { color: #666; }
+    CSS
+  end
+
+  def self.render_payload_html(payload)
+    <<~HTML
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Recorded Result View</title>
+        <style>
+      #{html_report_styles}
+        </style>
+      </head>
+      <body>
+        <div id="lumitrace-app"></div>
+        <noscript><p class="noscript">Lumitrace HTML report requires JavaScript to render the source and trace view.</p></noscript>
+        <script id="lumitrace-payload" type="application/json">#{payload_json_for_script(payload)}#{'</scr' + 'ipt>'}
+        <script>
+      #{html_renderer_js}
+        #{'</scr' + 'ipt>'}
+      </body>
+      </html>
+    HTML
   end
 
   def self.detect_collect_mode(events)
@@ -1861,9 +2360,7 @@ module GenerateResultedHtml
     by_file = events.group_by { |e| e[:file] }
     ranges_by_file = normalize_ranges_by_file(ranges_by_file)
 
-    target_paths = by_file.keys
-
-    sections = target_paths.sort.map do |path|
+    files = by_file.keys.sort.map do |path|
       next unless File.exist?(path)
       src = File.read(path)
       if ranges_by_file
@@ -1872,136 +2369,18 @@ module GenerateResultedHtml
       else
         ranges = nil
       end
-      file_events = add_missing_events((by_file[path] || []).dup, src, path, ranges)
-      expected_by_line, executed_by_line = line_stats(src, ranges, file_events, path)
-      html_lines = []
-      prev_lineno = nil
-      first_lineno = nil
-      last_lineno = nil
-      src.lines.each_with_index do |line, idx|
-        lineno = idx + 1
-        next if ranges && !line_in_ranges?(lineno, ranges)
-        first_lineno ||= lineno
-        if prev_lineno && lineno > prev_lineno + 1
-          html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-        end
-        line_text = line.chomp
-        evs = aggregate_events_for_line(file_events, lineno, line_text.length)
-        expected = expected_by_line[lineno]
-        executed = executed_by_line[lineno]
-        line_class = line_class_for(expected, executed)
-        if expected > 0 && executed == 0
-          evs.each { |e| e[:suppress_miss] = true }
-        end
-        if evs.empty?
-          html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
-        else
-          rendered = render_line_with_events(line_text, evs)
-          html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
-        end
-        prev_lineno = lineno
-        last_lineno = lineno
-      end
-      if first_lineno && first_lineno > 1
-        html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
-      end
-      if last_lineno && last_lineno < src.lines.length
-        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-      end
-
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
-      <<~HTML
-        <h2 class="file">#{esc(rel)}</h2>
-        <pre class="code"><code>
-      #{html_lines.join("")}
-        </code></pre>
-      HTML
-    end.compact.join("\n")
+      file_events = add_missing_events((by_file[path] || []).dup, src, path, ranges)
+      build_html_payload_file(
+        path: path,
+        display_path: rel,
+        source: src,
+        ranges: ranges,
+        trace_events: file_events
+      )
+    end.compact
 
-    <<~HTML
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Recorded Result View</title>
-        <style>
-          body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
-          .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
-          .line:hover { background: #fff2c6; }
-          .line.hit { background: #f0ffe7; }
-          .line.miss { background: #ffecec; }
-          .line.ellipsis { color: #999; }
-          .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 4px; }
-          .mode { color: #444; margin-bottom: 8px; }
-          .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
-          .expr { position: relative; display: inline-block; padding-bottom: 1px; }
-          .expr.hit { }
-          .expr.depth-1 { --hl: #7fbf7f; }
-          .expr.depth-2 { --hl: #6fa8ff; }
-          .expr.depth-3 { --hl: #ffb347; }
-          .expr.depth-4 { --hl: #d78bff; }
-          .expr.depth-5 { --hl: #ff6f91; }
-          .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
-          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
-          .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
-          .marker.miss { color: #c07070; }
-          .marker.arg { color: #2f6f8e; }
-          .marker .tooltip {
-            display: none;
-            position: absolute;
-            left: 0;
-            top: 100%;
-            margin-top: 4px;
-            background: #2b2b2b;
-            color: #fff;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            white-space: pre;
-            min-width: 16ch;
-            max-width: 90vw;
-            overflow-x: auto;
-            overflow-y: hidden;
-            z-index: 10;
-            pointer-events: auto;
-          }
-          .marker:hover .tooltip,
-          .marker:focus-within .tooltip,
-          .marker .tooltip:hover { display: block; }
-        </style>
-      </head>
-      <body>
-        <div class="hint">Hover highlighted text to see recorded values.</div>
-        <div class="mode">#{esc(mode_info[:text])}</div>
-        #{sections}
-        <script>
-          (function() {
-            document.querySelectorAll('.marker').forEach(marker => {
-              marker.addEventListener('mouseenter', () => {
-                document.querySelectorAll('.expr').forEach(e => e.classList.remove('active'));
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.add('active'));
-                } else {
-                  marker.closest('.expr')?.classList.add('active');
-                }
-              });
-              marker.addEventListener('mouseleave', () => {
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.remove('active'));
-                } else {
-                  marker.closest('.expr')?.classList.remove('active');
-                }
-              });
-            });
-          })();
-        #{'</scr' + 'ipt>'}
-      </body>
-      </html>
-    HTML
+    render_payload_html(build_html_payload(mode_info: mode_info, files: files))
   end
 
   def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil)
@@ -2009,130 +2388,21 @@ module GenerateResultedHtml
     events = normalize_events(events)
     ranges = normalize_ranges(ranges)
     target_events = add_missing_events(events.select { |e| e[:file] == filename }, source, filename, ranges)
-    expected_by_line, executed_by_line = line_stats(source, ranges, target_events, filename)
 
-    html_lines = []
-    prev_lineno = nil
-    first_lineno = nil
-    last_lineno = nil
-    source.lines.each_with_index do |line, idx|
-      lineno = idx + 1
-      next if ranges && !line_in_ranges?(lineno, ranges)
-      first_lineno ||= lineno
-      if prev_lineno && lineno > prev_lineno + 1
-        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-      end
-      line_text = line.chomp
-      evs = aggregate_events_for_line(target_events, lineno, line_text.length)
-      expected = expected_by_line[lineno]
-      executed = executed_by_line[lineno]
-      line_class = line_class_for(expected, executed)
-      if expected > 0 && executed == 0
-        evs.each { |e| e[:suppress_miss] = true }
-      end
-      if evs.empty?
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
-      else
-        rendered = render_line_with_events(line_text, evs)
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
-      end
-      prev_lineno = lineno
-      last_lineno = lineno
-    end
-    if first_lineno && first_lineno > 1
-      html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
-    end
-    if last_lineno && last_lineno < source.lines.length
-      html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-    end
+    payload = build_html_payload(
+      mode_info: mode_info,
+      files: [
+        build_html_payload_file(
+          path: filename,
+          display_path: filename,
+          source: source,
+          ranges: ranges,
+          trace_events: target_events
+        )
+      ]
+    )
 
-    <<~HTML
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Recorded Result View</title>
-        <style>
-          body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
-          .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
-          .line:hover { background: #fff2c6; }
-          .line.hit { background: #f0ffe7; }
-          .line.miss { background: #ffecec; }
-          .line.ellipsis { color: #999; }
-          .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 4px; }
-          .mode { color: #444; margin-bottom: 8px; }
-          .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
-          .expr { position: relative; display: inline-block; padding-bottom: 1px; }
-          .expr.hit { }
-          .expr.depth-1 { --hl: #7fbf7f; }
-          .expr.depth-2 { --hl: #6fa8ff; }
-          .expr.depth-3 { --hl: #ffb347; }
-          .expr.depth-4 { --hl: #d78bff; }
-          .expr.depth-5 { --hl: #ff6f91; }
-          .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
-          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
-          .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
-          .marker.miss { color: #c07070; }
-          .marker.arg { color: #2f6f8e; }
-          .marker .tooltip {
-            display: none;
-            position: absolute;
-            left: 0;
-            top: 100%;
-            margin-top: 4px;
-            background: #2b2b2b;
-            color: #fff;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            white-space: pre;
-            min-width: 16ch;
-            max-width: 90vw;
-            overflow-x: auto;
-            overflow-y: hidden;
-            z-index: 10;
-            pointer-events: auto;
-          }
-          .marker:hover .tooltip,
-          .marker:focus-within .tooltip,
-          .marker .tooltip:hover { display: block; }
-        </style>
-      </head>
-      <body>
-        <div class="hint">Hover highlighted text to see recorded values.</div>
-        <div class="mode">#{esc(mode_info[:text])}</div>
-        <h2 class="file">#{esc(filename)}</h2>
-        <pre class="code"><code>
-      #{html_lines.join("")}
-        </code></pre>
-        <script>
-          (function() {
-            document.querySelectorAll('.marker').forEach(marker => {
-              marker.addEventListener('mouseenter', () => {
-                document.querySelectorAll('.expr').forEach(e => e.classList.remove('active'));
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.add('active'));
-                } else {
-                  marker.closest('.expr')?.classList.add('active');
-                }
-              });
-              marker.addEventListener('mouseleave', () => {
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.remove('active'));
-                } else {
-                  marker.closest('.expr')?.classList.remove('active');
-                }
-              });
-            });
-          })();
-        #{'</scr' + 'ipt>'}
-      </body>
-      </html>
-    HTML
+    render_payload_html(payload)
   end
 
   def self.render_text_from_events(source, events, filename: "script.rb", ranges: nil, with_header: true, header_label: nil, tty: nil)

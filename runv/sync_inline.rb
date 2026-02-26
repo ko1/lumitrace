@@ -3,6 +3,7 @@
 index_path = File.expand_path("index.html", __dir__)
 record_path = File.expand_path("../lib/lumitrace/record_instrument.rb", __dir__)
 html_path = File.expand_path("../lib/lumitrace/generate_resulted_html.rb", __dir__)
+renderer_js_path = File.expand_path("../lib/lumitrace/generate_resulted_html_renderer.js", __dir__)
 version_path = File.expand_path("../lib/lumitrace/version.rb", __dir__)
 
 index = File.read(index_path)
@@ -15,6 +16,17 @@ record_code = File.read(record_path).rstrip
 html_code = File.read(html_path).lines.reject { |line|
   line.match?(/^\s*require_relative\s+["']record_instrument["']\s*$/)
 }.join.rstrip
+renderer_js = File.read(renderer_js_path).rstrip
+renderer_js_literal = renderer_js.gsub(/\\/, "\\\\\\\\").gsub(/'/, "\\\\'")
+
+renderer_method_src = <<~RUBY.rstrip
+  def self.html_renderer_js
+    @html_renderer_js ||= '#{renderer_js_literal}'
+  end
+RUBY
+html_code_after = html_code.sub(/def self\.html_renderer_js\s*\n.*?\n\s*end/m) { renderer_method_src }
+abort "failed to inline renderer JS into GenerateResultedHtml" if html_code_after == html_code
+html_code = html_code_after
 html_code = html_code.gsub("</script>", "\#{'</scr' + 'ipt>'}")
 
 generated = +"    # LUMITRACE_INLINE_BEGIN\n"
@@ -30,7 +42,7 @@ unless index.match?(pattern)
   abort "inline block markers not found in #{index_path}"
 end
 
-index.sub!(pattern, generated)
+index.sub!(pattern) { generated }
 index.gsub!(/lumitrace \d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\./, "lumitrace #{version}.")
 File.write(index_path, index)
 puts "updated #{index_path}"
