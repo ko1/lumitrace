@@ -35,10 +35,12 @@ module Lumitrace
 
     json = json_env.nil? ? false : (json_env != false ? (json_env == true ? true : json_env) : false)
 
-    if text_env.nil?
-      text = !(html || json)
+    text = if text_env.nil?
+      !(html || json)
+    elsif text_env == false
+      false
     else
-      text = (text_env != false)
+      text_env
     end
 
     verbose = parse_env_int(ENV["LUMITRACE_VERBOSE"])

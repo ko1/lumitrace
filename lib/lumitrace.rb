@@ -472,6 +472,7 @@ module Lumitrace
             json_path = File.expand_path(json_path, @atexit_output_root)
             RecordInstrument.dump_events_json(events, json_path)
             verbose_log("json: #{json_path}")
+            notify_output_path("json", json_path)
           end
           if @atexit_text
             tty = @atexit_text == true ? $stdout.tty? : false
@@ -488,6 +489,7 @@ module Lumitrace
               text_path = File.expand_path(@atexit_text, @atexit_output_root)
               File.write(text_path, text)
               verbose_log("text: #{text_path}")
+              notify_output_path("text", text_path)
             end
           end
           if @atexit_html
@@ -502,6 +504,7 @@ module Lumitrace
             out_path = File.expand_path(out_path, @atexit_output_root)
             File.write(out_path, html)
             verbose_log("html: #{out_path}")
+            notify_output_path("html", out_path)
           end
           if results_parent? && @results_dir && Dir.exist?(@results_dir)
             begin
@@ -521,6 +524,11 @@ module Lumitrace
   def self.disable!
     return unless defined?(RecordRequire)
     RecordRequire.disable
+  end
+
+  def self.notify_output_path(kind, path)
+    return if @verbose_level.to_i > 0
+    warn "lumitrace #{kind}: #{path}"
   end
 
 end
