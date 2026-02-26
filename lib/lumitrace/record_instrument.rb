@@ -180,6 +180,7 @@ module RecordInstrument
     return false unless node.respond_to?(:location)
     return false if literal_value_node?(node)
     return false if command_style_call_node?(node)
+    return false if parent.is_a?(Prism::DefinedNode)
     if parent.is_a?(Prism::AliasGlobalVariableNode) || parent.is_a?(Prism::AliasMethodNode)
       return false
     end
@@ -212,6 +213,7 @@ module RecordInstrument
 
   def self.instrumentable_child_nodes(node)
     return [] unless node
+    return [] if node.is_a?(Prism::DefinedNode)
     if command_style_call_node?(node) && node.respond_to?(:block) && node.block
       [node.block]
     else

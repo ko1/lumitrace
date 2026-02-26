@@ -85,6 +85,22 @@ class LumiTraceTest < Minitest::Test
     assert_includes out, "path path"
   end
 
+  def test_instrument_does_not_wrap_inside_defined
+    skip "RubyVM::InstructionSequence unavailable" unless defined?(RubyVM::InstructionSequence)
+
+    src = <<~RUBY
+      foo = 1
+      bar = 2
+      defined?(foo + bar)
+    RUBY
+
+    out = Lumitrace::RecordInstrument.instrument_source(src, [], file_label: "sample.rb")
+    RubyVM::InstructionSequence.compile(out, "sample.rb")
+
+    assert_includes out, "defined?(foo + bar)"
+    refute_match(/defined\?\([^)]*Lumitrace::R\(/, out)
+  end
+
   def test_render_all_generates_html
     Dir.mktmpdir do |dir|
       path = File.join(dir, "lumitrace_events.json")
