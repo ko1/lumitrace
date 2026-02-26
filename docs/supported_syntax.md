@@ -112,6 +112,13 @@ These are intentionally skipped to keep output valid Ruby:
     ```
   - The implicit `token` read is **not** instrumented.
 
+- Expressions inside `defined?(...)`:
+  - Example:
+    ```ruby
+    defined?(foo + bar)
+    ```
+  - The operand expression (`foo + bar`) is **not** instrumented, to preserve `defined?` semantics.
+
 ## Rationale
 
 All skips above correspond to syntactic positions where wrapping the token with

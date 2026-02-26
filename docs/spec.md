@@ -274,8 +274,10 @@ lumitrace [options] exec CMD [args...]
   - `Mode: types (type counts)`
   - `Mode: history (last N sample[s])`
   - In `history`, `N` uses configured `max_samples` when available; otherwise it is inferred from the loaded events.
+- When available, the page header also shows the executed command as `Command: ...`.
 - Each file is shown in its own section.
 - When multiple files are present, the HTML UI shows a left file tree and a single-file viewer on the right.
+- Directory nodes in the file tree are expanded by default.
 - Selecting a file in the tree switches the visible file without reloading the page.
 - The selected file is reflected in the URL hash as `#file=...` (using the rendered file path label) so links can open a specific file view.
 - Clicking a line number updates the URL hash to include the selected line (for example `#file=lib/foo.rb&line=42`).
@@ -286,8 +288,10 @@ lumitrace [options] exec CMD [args...]
 - Hovering the icon shows recorded values.
 - Only the last 3 values are shown in the tooltip as `value (Type)`; additional values are summarized as `... (+N more)`.
 - Tooltip is scrollable horizontally for long values.
+- Tooltip is shown above the marker icon (to avoid covering the mouse cursor).
 - When ranges are used, skipped sections are shown as `...` in the line-number column.
 - Lines where all instrumentable expressions are unexecuted are highlighted in a light red. If a line mixes executed and unexecuted expressions, only the unexecuted expressions are highlighted.
+- The page footer includes an attribution link to the Lumitrace site and the Lumitrace version used to generate the report.
 
 ### HTML Payload Schema (`v1`)
 
@@ -332,6 +336,8 @@ lumitrace [options] exec CMD [args...]
   - Human-readable label shown in the HTML header.
 - `meta.max_samples`:
   - Effective/inferred max samples for `history`; may be `null`.
+- `meta.command`:
+  - Optional command line shown in the HTML header (for CLI-generated reports).
 - `files[]`:
   - One entry per rendered source file.
 - `files[].path`:
@@ -367,4 +373,5 @@ lumitrace [options] exec CMD [args...]
 
 - Requires `RubyVM::InstructionSequence.translate` support in the Ruby build.
 - Instrumentation is for debugging; semantics may change for unusual edge cases.
+- Expressions inside `defined?(...)` are intentionally not instrumented to preserve `defined?` semantics.
 - Tool does not attempt to preserve file encoding comments.

@@ -131,9 +131,13 @@ HTML notes:
 - Lines where all instrumentable expressions are unexecuted are shaded light red; mixed lines only shade the unexecuted expressions.
 - When ranges are used, skipped sections are shown as `...` in the line-number column.
 - When multiple files are included, use the left file tree to switch files.
+- Directory nodes in the file tree are expanded by default.
 - The file tree shows per-file line coverage as `(executed/expression-lines)`.
 - The selected file is stored in the URL hash (`#file=...`), so copying the URL shares a direct link to that file view.
 - Click a line number to update the URL with that line (`#file=...&line=...`) and open the same file+line later.
+- The URL hash is updated automatically while navigating (there is no separate permalink button).
+- The header also shows `Command: ...` for CLI-generated reports.
+- The footer shows the Lumitrace version that generated the report.
 
 ### Range example
 
