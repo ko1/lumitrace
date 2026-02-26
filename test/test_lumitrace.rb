@@ -64,6 +64,27 @@ class LumiTraceTest < Minitest::Test
     assert_operator out.scan(/Lumitrace::R\(\d+, \(/).length, :>=, 2
   end
 
+  def test_instrument_command_style_call_with_hash_and_block_compiles
+    skip "RubyVM::InstructionSequence unavailable" unless defined?(RubyVM::InstructionSequence)
+
+    src = <<~RUBY
+      def path(*args)
+        yield if block_given?
+      end
+
+      path = "x"
+      glob = "*.rb"
+
+      path path, "glob" => glob do
+        path
+      end
+    RUBY
+
+    out = Lumitrace::RecordInstrument.instrument_source(src, [], file_label: "sample.rb")
+    RubyVM::InstructionSequence.compile(out, "sample.rb")
+    assert_includes out, "path path"
+  end
+
   def test_render_all_generates_html
     Dir.mktmpdir do |dir|
       path = File.join(dir, "lumitrace_events.json")

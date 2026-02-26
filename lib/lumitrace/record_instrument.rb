@@ -7,6 +7,8 @@ module Lumitrace
   end
 
 module RecordInstrument
+  IDENTIFIER_METHOD_NAME_RE = /\A[a-z_]\w*[!?=]?\z/.freeze
+
   SKIP_NODE_CLASSES = [
     Prism::DefNode,
     Prism::ClassNode,
@@ -99,7 +101,7 @@ module RecordInstrument
         end
       end
 
-      node.child_nodes.each { |child| stack << [child, node] }
+      instrumentable_child_nodes(node).each { |child| stack << [child, node] }
     end
     locs
   end
@@ -136,7 +138,7 @@ module RecordInstrument
         end
       end
 
-      node.child_nodes.each { |child| stack << [child, node] }
+      instrumentable_child_nodes(node).each { |child| stack << [child, node] }
     end
 
     inserts
@@ -177,6 +179,7 @@ module RecordInstrument
   def self.wrap_expr?(node, parent = nil)
     return false unless node.respond_to?(:location)
     return false if literal_value_node?(node)
+    return false if command_style_call_node?(node)
     if parent.is_a?(Prism::AliasGlobalVariableNode) || parent.is_a?(Prism::AliasMethodNode)
       return false
     end
@@ -194,6 +197,26 @@ module RecordInstrument
       return false
     end
     WRAP_NODE_CLASSES.include?(node.class)
+  end
+
+  def self.command_style_call_node?(node)
+    return false unless node.is_a?(Prism::CallNode)
+    return false unless node.respond_to?(:arguments) && node.arguments
+    return false if node.respond_to?(:opening_loc) && node.opening_loc
+
+    name = node.respond_to?(:name) ? node.name : nil
+    return false unless name
+
+    IDENTIFIER_METHOD_NAME_RE.match?(name.to_s)
+  end
+
+  def self.instrumentable_child_nodes(node)
+    return [] unless node
+    if command_style_call_node?(node) && node.respond_to?(:block) && node.block
+      [node.block]
+    else
+      node.child_nodes
+    end
   end
 
   def self.expr_location(node)
