@@ -5,6 +5,18 @@ module Lumitrace
 module GenerateResultedHtml
   RENDERER_JS_PATH = File.expand_path("generate_resulted_html_renderer.js", __dir__)
 
+  def self.monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  end
+
+  def self.time_step(label, logger = nil)
+    start = monotonic_now
+    result = yield
+    elapsed_ms = (monotonic_now - start) * 1000.0
+    logger&.call(format("html render: %s %.1fms", label, elapsed_ms))
+    result
+  end
+
   def self.render(source_path, events_path, ranges: nil, collect_mode: nil, max_samples: nil)
     unless File.exist?(events_path)
       abort "missing #{events_path}"
@@ -18,7 +30,6 @@ module GenerateResultedHtml
     mode_info = resolve_mode_info(raw_events, collect_mode: collect_mode, max_samples: max_samples)
     normalized_ranges = normalize_ranges(ranges)
     events = normalize_events(raw_events).select { |e| e[:file] == source_path }
-    events = add_missing_events(events, src, source_path, normalized_ranges)
 
     payload = build_html_payload(
       mode_info: mode_info,
@@ -56,9 +67,18 @@ module GenerateResultedHtml
     }
   end
 
-  def self.build_html_payload_file(path:, display_path:, source:, ranges:, trace_events:)
+  def self.build_html_payload_file(path:, display_path:, source:, ranges:, trace_events:, logger: nil)
+    sort_start = logger ? monotonic_now : nil
     sorted_events = Array(trace_events).sort_by do |e|
       [e[:start_line].to_i, e[:start_col].to_i, e[:end_line].to_i, e[:end_col].to_i]
+    end
+    sort_ms = sort_start ? (monotonic_now - sort_start) * 1000.0 : nil
+
+    map_start = logger ? monotonic_now : nil
+    trace_payload = sorted_events.map { |e| event_to_html_trace_payload(e) }
+    map_ms = map_start ? (monotonic_now - map_start) * 1000.0 : nil
+    if logger
+      logger.call(format("html render: payload_file %s sort=%.1fms map=%.1fms events=%d", display_path, sort_ms, map_ms, sorted_events.length))
     end
 
     {
@@ -66,7 +86,7 @@ module GenerateResultedHtml
       display_path: display_path,
       source: source,
       ranges: ranges,
-      trace: sorted_events.map { |e| event_to_html_trace_payload(e) }
+      trace: trace_payload
     }
   end
 
@@ -355,6 +375,7 @@ module GenerateResultedHtml
   def self.comment_value_with_total_for_line(events)
     best = best_event_for_line(events)
     return nil unless best
+    return nil if best[:total].to_i <= 0
 
     sampled_last = best[:sampled_values]&.last
     v, t = last_value_to_pair(sampled_last)
@@ -458,9 +479,16 @@ module GenerateResultedHtml
 
       next if t <= s
       spans << { start_col: s, end_col: t }
-      key_id = e[:key].join(":")
-      buckets[e[:key]] = {
-        key: e[:key],
+      event_key = e[:key] || [
+        e[:file],
+        e[:start_line].to_i,
+        e[:start_col].to_i,
+        e[:end_line].to_i,
+        e[:end_col].to_i
+      ]
+      key_id = event_key.join(":")
+      buckets[event_key] = {
+        key: event_key,
         key_id: key_id,
         start_col: s,
         end_col: t,
@@ -588,34 +616,6 @@ module GenerateResultedHtml
     ranges.any? { |(s, e)| line >= s && line <= e }
   end
 
-  def self.add_missing_events(events, source, filename, ranges)
-    expected = RecordInstrument.collect_locations_from_source(source, ranges || [])
-    existing = {}
-    events.each do |e|
-      key = [e[:file], e[:start_line], e[:start_col], e[:end_line], e[:end_col]]
-      existing[key] = true
-    end
-      expected.each do |loc|
-        key = [filename, loc[:start_line], loc[:start_col], loc[:end_line], loc[:end_col]]
-        next if existing[key]
-        events << {
-          key: key,
-          file: key[0],
-          start_line: key[1],
-          start_col: key[2],
-          end_line: key[3],
-          end_col: key[4],
-          kind: loc[:kind],
-          name: loc[:name],
-          sampled_values: [],
-          types: {},
-          total: 0
-        }
-        existing[key] = true
-      end
-    events
-  end
-
   def self.line_stats(source, ranges, events, filename)
     expected_by_line = Hash.new(0)
     RecordInstrument.collect_locations_from_source(source, ranges || []).each do |loc|
@@ -639,20 +639,46 @@ module GenerateResultedHtml
     [expected_by_line, executed_by_line]
   end
 
-  def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil)
+  def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil)
     raw_events = JSON.parse(File.read(events_path))
-    render_all_from_events(raw_events, root: root, ranges_by_file: ranges_by_file, collect_mode: collect_mode, max_samples: max_samples)
+    render_all_from_events(
+      raw_events,
+      root: root,
+      ranges_by_file: ranges_by_file,
+      collect_mode: collect_mode,
+      max_samples: max_samples,
+      logger: logger
+    )
   end
 
-  def self.render_all_from_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil)
-    mode_info = resolve_mode_info(events, collect_mode: collect_mode, max_samples: max_samples)
-    events = normalize_events(events)
-    by_file = events.group_by { |e| e[:file] }
-    ranges_by_file = normalize_ranges_by_file(ranges_by_file)
+  def self.render_all_from_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil)
+    normalized = time_step("normalize_events", logger) { normalize_events(events) }
+    render_all_from_normalized_events(
+      normalized,
+      root: root,
+      ranges_by_file: ranges_by_file,
+      collect_mode: collect_mode,
+      max_samples: max_samples,
+      logger: logger
+    )
+  end
 
-    files = by_file.keys.sort.map do |path|
+  def self.render_all_from_normalized_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil)
+    total_start = monotonic_now
+
+    mode_info = time_step("resolve_mode", logger) do
+      resolve_mode_info(events, collect_mode: collect_mode, max_samples: max_samples)
+    end
+    by_file = time_step("group_by_file", logger) { events.group_by { |e| e[:file] } }
+    ranges_by_file = time_step("normalize_ranges_by_file", logger) { normalize_ranges_by_file(ranges_by_file) }
+
+    files = []
+    by_file.keys.sort.each do |path|
       next unless File.exist?(path)
+      file_start = monotonic_now
+      read_start = logger ? monotonic_now : nil
       src = File.read(path)
+      read_ms = read_start ? (monotonic_now - read_start) * 1000.0 : nil
       if ranges_by_file
         next unless ranges_by_file.key?(path)
         ranges = ranges_by_file[path] || []
@@ -660,24 +686,49 @@ module GenerateResultedHtml
         ranges = nil
       end
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
-      file_events = add_missing_events((by_file[path] || []).dup, src, path, ranges)
-      build_html_payload_file(
+      select_start = logger ? monotonic_now : nil
+      file_events = by_file[path] || []
+      select_ms = select_start ? (monotonic_now - select_start) * 1000.0 : nil
+      payload_file_start = logger ? monotonic_now : nil
+      files << build_html_payload_file(
         path: path,
         display_path: rel,
         source: src,
         ranges: ranges,
-        trace_events: file_events
+        trace_events: file_events,
+        logger: logger
       )
-    end.compact
+      payload_file_ms = payload_file_start ? (monotonic_now - payload_file_start) * 1000.0 : nil
+      if logger
+        elapsed_ms = (monotonic_now - file_start) * 1000.0
+        logger.call(format("html render: file %s read=%.1fms select=%.1fms payload=%.1fms events=%d bytes=%d total=%.1fms", rel, read_ms, select_ms, payload_file_ms, file_events.length, src.bytesize, elapsed_ms))
+      end
+    end
 
-    render_payload_html(build_html_payload(mode_info: mode_info, files: files))
+    payload = time_step("build_payload", logger) { build_html_payload(mode_info: mode_info, files: files) }
+    html = time_step("render_payload_html", logger) { render_payload_html(payload) }
+    if logger
+      total_ms = (monotonic_now - total_start) * 1000.0
+      logger.call(format("html render: total files=%d events=%d html_bytes=%d %.1fms", files.length, events.length, html.bytesize, total_ms))
+    end
+    html
   end
 
   def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil)
+    render_source_from_normalized_events(
+      source,
+      normalize_events(events),
+      filename: filename,
+      ranges: ranges,
+      collect_mode: collect_mode,
+      max_samples: max_samples
+    )
+  end
+
+  def self.render_source_from_normalized_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil)
     mode_info = resolve_mode_info(events, collect_mode: collect_mode, max_samples: max_samples)
-    events = normalize_events(events)
     ranges = normalize_ranges(ranges)
-    target_events = add_missing_events(events.select { |e| e[:file] == filename }, source, filename, ranges)
+    target_events = events.select { |e| e[:file] == filename }
 
     payload = build_html_payload(
       mode_info: mode_info,
@@ -696,7 +747,18 @@ module GenerateResultedHtml
   end
 
   def self.render_text_from_events(source, events, filename: "script.rb", ranges: nil, with_header: true, header_label: nil, tty: nil)
-    events = normalize_events(events)
+    render_text_from_normalized_events(
+      source,
+      normalize_events(events),
+      filename: filename,
+      ranges: ranges,
+      with_header: with_header,
+      header_label: header_label,
+      tty: tty
+    )
+  end
+
+  def self.render_text_from_normalized_events(source, events, filename: "script.rb", ranges: nil, with_header: true, header_label: nil, tty: nil)
     ranges = normalize_ranges(ranges)
     target_events = events.select { |e| e[:file] == filename }
     term_width = tty ? terminal_width : nil
@@ -718,7 +780,7 @@ module GenerateResultedHtml
       ]
       next if seen[key]
       seen[key] = true
-      executed_by_line[line] += 1 if line
+      executed_by_line[line] += 1 if line && (e[:total] || e["total"]).to_i > 0
     end
 
     out = +""
@@ -819,7 +881,10 @@ module GenerateResultedHtml
   end
 
   def self.render_text_all_from_events(events, root: Dir.pwd, ranges_by_file: nil, tty: nil)
-    events = normalize_events(events)
+    render_text_all_from_normalized_events(normalize_events(events), root: root, ranges_by_file: ranges_by_file, tty: tty)
+  end
+
+  def self.render_text_all_from_normalized_events(events, root: Dir.pwd, ranges_by_file: nil, tty: nil)
     by_file = events.group_by { |e| e[:file] }
     ranges_by_file = normalize_ranges_by_file(ranges_by_file)
 
@@ -833,7 +898,7 @@ module GenerateResultedHtml
         ranges = nil
       end
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
-      render_text_from_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel, tty: tty)
+      render_text_from_normalized_events(src, events, filename: path, ranges: ranges, with_header: true, header_label: rel, tty: tty)
     end.compact
 
     header = "\n=== Lumitrace Results (text) ===\n\n"

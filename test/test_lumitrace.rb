@@ -264,6 +264,37 @@ class LumiTraceTest < Minitest::Test
     end
   end
 
+  def test_events_from_ids_includes_unhit_locations
+    with_record_instrument_state do
+      mod = Lumitrace::RecordInstrument
+      mod.instance_variable_set(:@events_by_id, [])
+      mod.instance_variable_set(:@loc_by_id, [])
+      mod.instance_variable_set(:@next_id, 0)
+      Lumitrace.install_collect_mode("history")
+      mod.max_samples_per_expr = 3
+
+      hit_id = mod.register_location(
+        "a.rb",
+        { start_line: 1, start_col: 0, end_line: 1, end_col: 1 },
+        kind: :expr
+      )
+      mod.register_location(
+        "a.rb",
+        { start_line: 2, start_col: 0, end_line: 2, end_col: 1 },
+        kind: :expr
+      )
+
+      Lumitrace::R(hit_id, 1)
+
+      events = mod.events_from_ids.sort_by { |e| e[:start_line] }
+      assert_equal 2, events.length
+      assert_equal 1, events[0][:total]
+      assert_equal 0, events[1][:total]
+      assert_equal [], events[1][:sampled_values]
+      assert_equal({}, events[1][:types])
+    end
+  end
+
   def test_text_comment_value_includes_type
     events = [
       {
@@ -365,6 +396,46 @@ class LumiTraceTest < Minitest::Test
       ]
     )
     assert_equal "types: Integer(3) (3rd run)", comment
+  end
+
+  def test_comment_value_ignores_unhit_event
+    comment = Lumitrace::GenerateResultedHtml.comment_value_with_total_for_line(
+      [
+        {
+          marker: true,
+          kind: "expr",
+          start_col: 0,
+          end_col: 1,
+          sampled_values: [],
+          types: {},
+          total: 0
+        }
+      ]
+    )
+    assert_nil comment
+  end
+
+  def test_render_text_marks_unhit_line_with_bang
+    text = Lumitrace::GenerateResultedHtml.render_text_from_normalized_events(
+      "foo = bar\n",
+      [
+        {
+          file: "a.rb",
+          start_line: 1,
+          start_col: 6,
+          end_line: 1,
+          end_col: 9,
+          kind: "expr",
+          sampled_values: [],
+          types: {},
+          total: 0
+        }
+      ],
+      filename: "a.rb",
+      with_header: false
+    )
+
+    assert_includes text, "!1| foo = bar"
   end
 
   def test_normalize_events_keeps_sampled_value_objects

@@ -364,22 +364,31 @@ module RecordInstrument
 
   def self.events_from_ids
     out = []
-    @events_by_id.each_with_index do |e, id|
-      next unless e
-      loc = @loc_by_id[id]
+    summary_cache = {}
+    @loc_by_id.each_with_index do |loc, id|
       next unless loc
+
+      e = @events_by_id[id]
       case collect_mode
       when :history
-        raw_values = values_from_ring(e)
-        all_types = history_type_set(e)
-        if all_types.nil? || all_types.empty?
-          all_types = {}
-          raw_values.each do |v|
-            t = value_type_name(v)
-            all_types[t] = (all_types[t] || 0) + 1
+        if e
+          raw_values = values_from_ring(e)
+          all_types = history_type_set(e)
+          if all_types.nil? || all_types.empty?
+            all_types = {}
+            raw_values.each do |v|
+              t = value_type_name(v)
+              all_types[t] = (all_types[t] || 0) + 1
+            end
           end
+          max = history_ring_size(e)
+          total = e[max + 1]
+        else
+          raw_values = []
+          all_types = {}
+          total = 0
         end
-        max = history_ring_size(e)
+
         out << {
           file: loc[:file],
           start_line: loc[:start_line],
@@ -388,9 +397,20 @@ module RecordInstrument
           end_col: loc[:end_col],
           kind: loc[:kind].to_s,
           name: loc[:name],
-          sampled_values: raw_values.map { |v| summarize_value(v, type: value_type_name(v)) },
+          sampled_values: raw_values.map do |v|
+            key = v.__id__
+            cached = summary_cache[key]
+            if cached
+              cached.dup
+            else
+              type = value_type_name(v)
+              summary = summarize_value(v, type: type)
+              summary_cache[key] = summary
+              summary.dup
+            end
+          end,
           types: sorted_type_counts(all_types),
-          total: e[max + 1]
+          total: total
         }
       when :types
         out << {
@@ -401,12 +421,12 @@ module RecordInstrument
           end_col: loc[:end_col],
           kind: loc[:kind].to_s,
           name: loc[:name],
-          types: sorted_type_counts(e[:types]),
-          total: e[:total]
+          types: sorted_type_counts(e ? e[:types] : nil),
+          total: e ? e[:total] : 0
         }
       else # :last
-        last_raw = e[:last_value]
-        last_type = value_type_name(last_raw)
+        last_raw = e && e[:last_value]
+        last_type = value_type_name(last_raw) if e
         out << {
           file: loc[:file],
           start_line: loc[:start_line],
@@ -415,9 +435,21 @@ module RecordInstrument
           end_col: loc[:end_col],
           kind: loc[:kind].to_s,
           name: loc[:name],
-          last_value: summarize_value(last_raw, type: last_type),
-          types: sorted_type_counts(e[:types]),
-          total: e[:total]
+          last_value: if e
+            key = last_raw.__id__
+            cached = summary_cache[key]
+            if cached
+              cached.dup
+            else
+              summary = summarize_value(last_raw, type: last_type)
+              summary_cache[key] = summary
+              summary.dup
+            end
+          else
+            nil
+          end,
+          types: sorted_type_counts(e ? e[:types] : nil),
+          total: e ? e[:total] : 0
         }
       end
     end

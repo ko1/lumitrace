@@ -459,13 +459,22 @@ module Lumitrace
             next
           end
 
+          events_collect_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           events = RecordInstrument.events
+          events_collect_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - events_collect_start) * 1000.0
+          verbose_log(format("events: collect %.1fms count=%d", events_collect_ms, events.length)) if @verbose_level.to_i > 0
+
+          detail_logger = (@verbose_level.to_i > 1 ? method(:verbose_log) : nil)
+
+          events_merge_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           events = RecordInstrument.merge_child_events(
             events,
             @results_dir,
             max_samples: @atexit_max_samples,
-            logger: method(:verbose_log)
+            logger: detail_logger
           )
+          events_merge_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - events_merge_start) * 1000.0
+          verbose_log(format("events: merge_children %.1fms count=%d", events_merge_ms, events.length)) if @verbose_level.to_i > 0
 
           if @atexit_json
             json_path = @atexit_json == true ? "lumitrace_recorded.json" : @atexit_json
@@ -476,7 +485,7 @@ module Lumitrace
           end
           if @atexit_text
             tty = @atexit_text == true ? $stdout.tty? : false
-            text = GenerateResultedHtml.render_text_all_from_events(
+            text = GenerateResultedHtml.render_text_all_from_normalized_events(
               events,
               root: @atexit_output_root,
               ranges_by_file: @atexit_ranges_by_file,
@@ -493,16 +502,22 @@ module Lumitrace
             end
           end
           if @atexit_html
-            html = GenerateResultedHtml.render_all_from_events(
+            html_render_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            html = GenerateResultedHtml.render_all_from_normalized_events(
               events,
               root: @atexit_output_root,
               ranges_by_file: @atexit_ranges_by_file,
               collect_mode: @atexit_collect_mode,
-              max_samples: @atexit_max_samples
+              max_samples: @atexit_max_samples,
+              logger: detail_logger
             )
+            html_render_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - html_render_start) * 1000.0
             out_path = @atexit_html == true ? "lumitrace_recorded.html" : @atexit_html
             out_path = File.expand_path(out_path, @atexit_output_root)
+            html_write_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
             File.write(out_path, html)
+            html_write_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - html_write_start) * 1000.0
+            verbose_log(format("html: render %.1fms write %.1fms bytes=%d", html_render_ms, html_write_ms, html.bytesize)) if @verbose_level.to_i > 0
             verbose_log("html: #{out_path}")
             notify_output_path("html", out_path)
           end
