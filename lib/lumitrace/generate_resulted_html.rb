@@ -3,6 +3,8 @@ require_relative "record_instrument"
 
 module Lumitrace
 module GenerateResultedHtml
+  RENDERER_JS_PATH = File.expand_path("generate_resulted_html_renderer.js", __dir__)
+
   def self.render(source_path, events_path, ranges: nil, collect_mode: nil, max_samples: nil)
     unless File.exist?(events_path)
       abort "missing #{events_path}"
@@ -12,112 +14,26 @@ module GenerateResultedHtml
     end
 
     raw_events = JSON.parse(File.read(events_path))
-    mode_info = resolve_mode_info(raw_events, collect_mode: collect_mode, max_samples: max_samples)
-    events = normalize_events(raw_events)
-    events = add_missing_events(events, File.read(source_path), source_path, ranges)
-
     src = File.read(source_path)
-    src_lines = src.lines
-    ranges = normalize_ranges(ranges)
-    expected_by_line, executed_by_line = line_stats(src, ranges, events, source_path)
+    mode_info = resolve_mode_info(raw_events, collect_mode: collect_mode, max_samples: max_samples)
+    normalized_ranges = normalize_ranges(ranges)
+    events = normalize_events(raw_events).select { |e| e[:file] == source_path }
+    events = add_missing_events(events, src, source_path, normalized_ranges)
 
-    html_lines = []
-    prev_lineno = nil
-    first_lineno = nil
-    last_lineno = nil
-    src_lines.each_with_index do |line, idx|
-      lineno = idx + 1
-      next if ranges && !line_in_ranges?(lineno, ranges)
-      first_lineno ||= lineno
-      if prev_lineno && lineno > prev_lineno + 1
-        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-      end
-      line_text = line.chomp
-      evs = aggregate_events_for_line(events, lineno, line_text.length)
-      expected = expected_by_line[lineno]
-      executed = executed_by_line[lineno]
-      line_class = line_class_for(expected, executed)
-      if expected > 0 && executed == 0
-        evs.each { |e| e[:suppress_miss] = true }
-      end
-      if evs.empty?
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
-      else
-        rendered = render_line_with_events(line_text, evs)
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
-      end
-      prev_lineno = lineno
-      last_lineno = lineno
-    end
-    if first_lineno && first_lineno > 1
-      html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
-    end
-    if last_lineno && last_lineno < src_lines.length
-      html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-    end
+    payload = build_html_payload(
+      mode_info: mode_info,
+      files: [
+        build_html_payload_file(
+          path: source_path,
+          display_path: File.basename(source_path),
+          source: src,
+          ranges: normalized_ranges,
+          trace_events: events
+        )
+      ]
+    )
 
-    <<~HTML
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Recorded Result View</title>
-        <style>
-          body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
-          .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
-          .line:hover { background: #fff2c6; }
-          .line.hit { background: #f0ffe7; }
-          .line.miss { background: #ffecec; }
-          .line.ellipsis { color: #999; }
-          .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 4px; }
-          .mode { color: #444; margin-bottom: 8px; }
-          .expr { position: relative; display: inline-block; padding-bottom: 1px; }
-          .expr.hit { }
-          .expr.depth-1 { --hl: #7fbf7f; }
-          .expr.depth-2 { --hl: #6fa8ff; }
-          .expr.depth-3 { --hl: #ffb347; }
-          .expr.depth-4 { --hl: #d78bff; }
-          .expr.depth-5 { --hl: #ff6f91; }
-          .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
-          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
-          .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
-          .marker.miss { color: #c07070; }
-          .marker.arg { color: #2f6f8e; }
-          .marker .tooltip {
-            display: none;
-            position: absolute;
-            left: 0;
-            top: 100%;
-            margin-top: 4px;
-            background: #2b2b2b;
-            color: #fff;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            white-space: pre;
-            min-width: 16ch;
-            max-width: 90vw;
-            overflow-x: auto;
-            overflow-y: hidden;
-            z-index: 10;
-            pointer-events: auto;
-          }
-          .marker:hover .tooltip,
-          .marker:focus-within .tooltip,
-          .marker .tooltip:hover { display: block; }
-        </style>
-      </head>
-      <body>
-        <div class="hint">Hover highlighted text to see recorded values.</div>
-        <div class="mode">#{esc(mode_info[:text])}</div>
-        <pre class="code"><code>
-      #{html_lines.join("")}
-        </code></pre>
-      </body>
-      </html>
-    HTML
+    render_payload_html(payload)
   end
 
   def self.esc(s)
@@ -126,6 +42,133 @@ module GenerateResultedHtml
       .gsub("<", "&lt;")
       .gsub(">", "&gt;")
       .gsub('"', "&quot;")
+  end
+
+  def self.build_html_payload(mode_info:, files:)
+    {
+      version: 1,
+      meta: {
+        mode: mode_info[:mode],
+        mode_text: mode_info[:text],
+        max_samples: mode_info[:max_samples]
+      },
+      files: files
+    }
+  end
+
+  def self.build_html_payload_file(path:, display_path:, source:, ranges:, trace_events:)
+    sorted_events = Array(trace_events).sort_by do |e|
+      [e[:start_line].to_i, e[:start_col].to_i, e[:end_line].to_i, e[:end_col].to_i]
+    end
+
+    {
+      path: path,
+      display_path: display_path,
+      source: source,
+      ranges: ranges,
+      trace: sorted_events.map { |e| event_to_html_trace_payload(e) }
+    }
+  end
+
+  def self.event_to_html_trace_payload(e)
+    {
+      location: [
+        e[:start_line].to_i,
+        e[:start_col].to_i,
+        e[:end_line].to_i,
+        e[:end_col].to_i
+      ],
+      kind: (e[:kind] || "expr").to_s,
+      name: e[:name],
+      sampled_values: e[:sampled_values] || [],
+      types: sorted_type_counts(e[:types]),
+      total: e[:total].to_i
+    }
+  end
+
+  def self.payload_json_for_script(payload)
+    JSON.generate(payload)
+      .gsub("</", "<\\/")
+      .gsub("\u2028", "\\u2028")
+      .gsub("\u2029", "\\u2029")
+  end
+
+  def self.html_renderer_js
+    @html_renderer_js ||= File.read(RENDERER_JS_PATH)
+  end
+
+  def self.html_report_styles
+    <<~CSS
+      body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
+      .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
+      .line { display: block; box-sizing: border-box; padding: 2px 8px; }
+      .line:hover { background: #fff2c6; }
+      .line.hit { background: #f0ffe7; }
+      .line.miss { background: #ffecec; }
+      .line.ellipsis { color: #999; }
+      .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
+      .hint { color: #666; margin-bottom: 4px; }
+      .mode { color: #444; margin-bottom: 8px; }
+      .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
+      .expr { position: relative; display: inline-block; padding-bottom: 1px; }
+      .expr.hit { }
+      .expr.depth-1 { --hl: #7fbf7f; }
+      .expr.depth-2 { --hl: #6fa8ff; }
+      .expr.depth-3 { --hl: #ffb347; }
+      .expr.depth-4 { --hl: #d78bff; }
+      .expr.depth-5 { --hl: #ff6f91; }
+      .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
+      .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
+      .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+      .marker.miss { color: #c07070; }
+      .marker.arg { color: #2f6f8e; }
+      .marker .tooltip {
+        display: none;
+        position: absolute;
+        left: 0;
+        top: 100%;
+        margin-top: 4px;
+        background: #2b2b2b;
+        color: #fff;
+        padding: 4px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: pre;
+        min-width: 16ch;
+        max-width: 90vw;
+        overflow-x: auto;
+        overflow-y: hidden;
+        z-index: 10;
+        pointer-events: auto;
+      }
+      .marker:hover .tooltip,
+      .marker:focus-within .tooltip,
+      .marker .tooltip:hover { display: block; }
+      .noscript { color: #666; }
+    CSS
+  end
+
+  def self.render_payload_html(payload)
+    <<~HTML
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Recorded Result View</title>
+        <style>
+      #{html_report_styles}
+        </style>
+      </head>
+      <body>
+        <div id="lumitrace-app"></div>
+        <noscript><p class="noscript">Lumitrace HTML report requires JavaScript to render the source and trace view.</p></noscript>
+        <script id="lumitrace-payload" type="application/json">#{payload_json_for_script(payload)}</script>
+        <script>
+      #{html_renderer_js}
+        </script>
+      </body>
+      </html>
+    HTML
   end
 
   def self.detect_collect_mode(events)
@@ -572,9 +615,7 @@ module GenerateResultedHtml
     by_file = events.group_by { |e| e[:file] }
     ranges_by_file = normalize_ranges_by_file(ranges_by_file)
 
-    target_paths = by_file.keys
-
-    sections = target_paths.sort.map do |path|
+    files = by_file.keys.sort.map do |path|
       next unless File.exist?(path)
       src = File.read(path)
       if ranges_by_file
@@ -583,136 +624,18 @@ module GenerateResultedHtml
       else
         ranges = nil
       end
-      file_events = add_missing_events((by_file[path] || []).dup, src, path, ranges)
-      expected_by_line, executed_by_line = line_stats(src, ranges, file_events, path)
-      html_lines = []
-      prev_lineno = nil
-      first_lineno = nil
-      last_lineno = nil
-      src.lines.each_with_index do |line, idx|
-        lineno = idx + 1
-        next if ranges && !line_in_ranges?(lineno, ranges)
-        first_lineno ||= lineno
-        if prev_lineno && lineno > prev_lineno + 1
-          html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-        end
-        line_text = line.chomp
-        evs = aggregate_events_for_line(file_events, lineno, line_text.length)
-        expected = expected_by_line[lineno]
-        executed = executed_by_line[lineno]
-        line_class = line_class_for(expected, executed)
-        if expected > 0 && executed == 0
-          evs.each { |e| e[:suppress_miss] = true }
-        end
-        if evs.empty?
-          html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
-        else
-          rendered = render_line_with_events(line_text, evs)
-          html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
-        end
-        prev_lineno = lineno
-        last_lineno = lineno
-      end
-      if first_lineno && first_lineno > 1
-        html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
-      end
-      if last_lineno && last_lineno < src.lines.length
-        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-      end
-
       rel = path.start_with?(root) ? path.sub(root + File::SEPARATOR, "") : path
-      <<~HTML
-        <h2 class="file">#{esc(rel)}</h2>
-        <pre class="code"><code>
-      #{html_lines.join("")}
-        </code></pre>
-      HTML
-    end.compact.join("\n")
+      file_events = add_missing_events((by_file[path] || []).dup, src, path, ranges)
+      build_html_payload_file(
+        path: path,
+        display_path: rel,
+        source: src,
+        ranges: ranges,
+        trace_events: file_events
+      )
+    end.compact
 
-    <<~HTML
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Recorded Result View</title>
-        <style>
-          body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
-          .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
-          .line:hover { background: #fff2c6; }
-          .line.hit { background: #f0ffe7; }
-          .line.miss { background: #ffecec; }
-          .line.ellipsis { color: #999; }
-          .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 4px; }
-          .mode { color: #444; margin-bottom: 8px; }
-          .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
-          .expr { position: relative; display: inline-block; padding-bottom: 1px; }
-          .expr.hit { }
-          .expr.depth-1 { --hl: #7fbf7f; }
-          .expr.depth-2 { --hl: #6fa8ff; }
-          .expr.depth-3 { --hl: #ffb347; }
-          .expr.depth-4 { --hl: #d78bff; }
-          .expr.depth-5 { --hl: #ff6f91; }
-          .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
-          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
-          .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
-          .marker.miss { color: #c07070; }
-          .marker.arg { color: #2f6f8e; }
-          .marker .tooltip {
-            display: none;
-            position: absolute;
-            left: 0;
-            top: 100%;
-            margin-top: 4px;
-            background: #2b2b2b;
-            color: #fff;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            white-space: pre;
-            min-width: 16ch;
-            max-width: 90vw;
-            overflow-x: auto;
-            overflow-y: hidden;
-            z-index: 10;
-            pointer-events: auto;
-          }
-          .marker:hover .tooltip,
-          .marker:focus-within .tooltip,
-          .marker .tooltip:hover { display: block; }
-        </style>
-      </head>
-      <body>
-        <div class="hint">Hover highlighted text to see recorded values.</div>
-        <div class="mode">#{esc(mode_info[:text])}</div>
-        #{sections}
-        <script>
-          (function() {
-            document.querySelectorAll('.marker').forEach(marker => {
-              marker.addEventListener('mouseenter', () => {
-                document.querySelectorAll('.expr').forEach(e => e.classList.remove('active'));
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.add('active'));
-                } else {
-                  marker.closest('.expr')?.classList.add('active');
-                }
-              });
-              marker.addEventListener('mouseleave', () => {
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.remove('active'));
-                } else {
-                  marker.closest('.expr')?.classList.remove('active');
-                }
-              });
-            });
-          })();
-        </script>
-      </body>
-      </html>
-    HTML
+    render_payload_html(build_html_payload(mode_info: mode_info, files: files))
   end
 
   def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil)
@@ -720,130 +643,21 @@ module GenerateResultedHtml
     events = normalize_events(events)
     ranges = normalize_ranges(ranges)
     target_events = add_missing_events(events.select { |e| e[:file] == filename }, source, filename, ranges)
-    expected_by_line, executed_by_line = line_stats(source, ranges, target_events, filename)
 
-    html_lines = []
-    prev_lineno = nil
-    first_lineno = nil
-    last_lineno = nil
-    source.lines.each_with_index do |line, idx|
-      lineno = idx + 1
-      next if ranges && !line_in_ranges?(lineno, ranges)
-      first_lineno ||= lineno
-      if prev_lineno && lineno > prev_lineno + 1
-        html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-      end
-      line_text = line.chomp
-      evs = aggregate_events_for_line(target_events, lineno, line_text.length)
-      expected = expected_by_line[lineno]
-      executed = executed_by_line[lineno]
-      line_class = line_class_for(expected, executed)
-      if expected > 0 && executed == 0
-        evs.each { |e| e[:suppress_miss] = true }
-      end
-      if evs.empty?
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{esc(line_text)}</span>\n"
-      else
-        rendered = render_line_with_events(line_text, evs)
-        html_lines << "<span class=\"line#{line_class}\" data-line=\"#{lineno}\"><span class=\"ln\">#{lineno}</span> #{rendered}</span>\n"
-      end
-      prev_lineno = lineno
-      last_lineno = lineno
-    end
-    if first_lineno && first_lineno > 1
-      html_lines.unshift("<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n")
-    end
-    if last_lineno && last_lineno < source.lines.length
-      html_lines << "<span class=\"line ellipsis\" data-line=\"...\"><span class=\"ln\">...</span></span>\n"
-    end
+    payload = build_html_payload(
+      mode_info: mode_info,
+      files: [
+        build_html_payload_file(
+          path: filename,
+          display_path: filename,
+          source: source,
+          ranges: ranges,
+          trace_events: target_events
+        )
+      ]
+    )
 
-    <<~HTML
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Recorded Result View</title>
-        <style>
-          body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
-          .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
-          .line { display: inline-block; width: 100%; box-sizing: border-box; padding: 2px 8px; }
-          .line:hover { background: #fff2c6; }
-          .line.hit { background: #f0ffe7; }
-          .line.miss { background: #ffecec; }
-          .line.ellipsis { color: #999; }
-          .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
-          .hint { color: #666; margin-bottom: 4px; }
-          .mode { color: #444; margin-bottom: 8px; }
-          .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
-          .expr { position: relative; display: inline-block; padding-bottom: 1px; }
-          .expr.hit { }
-          .expr.depth-1 { --hl: #7fbf7f; }
-          .expr.depth-2 { --hl: #6fa8ff; }
-          .expr.depth-3 { --hl: #ffb347; }
-          .expr.depth-4 { --hl: #d78bff; }
-          .expr.depth-5 { --hl: #ff6f91; }
-          .expr.active { background: rgba(127, 191, 127, 0.15); box-shadow: inset 0 -2px var(--hl, #7fbf7f); }
-          .expr.miss { background: rgba(255, 120, 120, 0.18); box-shadow: inset 0 -2px rgba(200, 120, 120, 0.6); }
-          .marker { position: relative; display: inline-block; margin-left: 4px; cursor: help; font-size: 10px; line-height: 1; user-select: none; -webkit-user-select: none; -moz-user-select: none; }
-          .marker.miss { color: #c07070; }
-          .marker.arg { color: #2f6f8e; }
-          .marker .tooltip {
-            display: none;
-            position: absolute;
-            left: 0;
-            top: 100%;
-            margin-top: 4px;
-            background: #2b2b2b;
-            color: #fff;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            white-space: pre;
-            min-width: 16ch;
-            max-width: 90vw;
-            overflow-x: auto;
-            overflow-y: hidden;
-            z-index: 10;
-            pointer-events: auto;
-          }
-          .marker:hover .tooltip,
-          .marker:focus-within .tooltip,
-          .marker .tooltip:hover { display: block; }
-        </style>
-      </head>
-      <body>
-        <div class="hint">Hover highlighted text to see recorded values.</div>
-        <div class="mode">#{esc(mode_info[:text])}</div>
-        <h2 class="file">#{esc(filename)}</h2>
-        <pre class="code"><code>
-      #{html_lines.join("")}
-        </code></pre>
-        <script>
-          (function() {
-            document.querySelectorAll('.marker').forEach(marker => {
-              marker.addEventListener('mouseenter', () => {
-                document.querySelectorAll('.expr').forEach(e => e.classList.remove('active'));
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.add('active'));
-                } else {
-                  marker.closest('.expr')?.classList.add('active');
-                }
-              });
-              marker.addEventListener('mouseleave', () => {
-                const key = marker.dataset.key;
-                if (key) {
-                  document.querySelectorAll(`.expr[data-key="${key}"]`).forEach(e => e.classList.remove('active'));
-                } else {
-                  marker.closest('.expr')?.classList.remove('active');
-                }
-              });
-            });
-          })();
-        </script>
-      </body>
-      </html>
-    HTML
+    render_payload_html(payload)
   end
 
   def self.render_text_from_events(source, events, filename: "script.rb", ranges: nil, with_header: true, header_label: nil, tty: nil)

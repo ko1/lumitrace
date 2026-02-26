@@ -267,6 +267,8 @@ lumitrace [options] exec CMD [args...]
 ## HTML Rendering
 
 - `GenerateResultedHtml.render_all` renders all files in one page.
+- Generated HTML is a single self-contained file (no external fetch): it embeds source/trace data as JSON and renders DOM with JavaScript.
+- JavaScript is required to render the code/trace view (a `<noscript>` message is shown otherwise).
 - The page header shows the active collect mode:
   - `Mode: last (last value)`
   - `Mode: types (type counts)`
@@ -280,10 +282,78 @@ lumitrace [options] exec CMD [args...]
 - When ranges are used, skipped sections are shown as `...` in the line-number column.
 - Lines where all instrumentable expressions are unexecuted are highlighted in a light red. If a line mixes executed and unexecuted expressions, only the unexecuted expressions are highlighted.
 
+### HTML Payload Schema (`v1`)
+
+- The generated HTML embeds a JSON payload in:
+  - `<script id="lumitrace-payload" type="application/json">...</script>`
+- Payload top-level shape:
+
+```json
+{
+  "version": 1,
+  "meta": {
+    "mode": "last|types|history",
+    "mode_text": "Mode: ...",
+    "max_samples": 3
+  },
+  "files": [
+    {
+      "path": "/abs/path/to/file.rb",
+      "display_path": "path/to/file.rb",
+      "source": "file contents...",
+      "ranges": [[1, 10], [20, 30]],
+      "trace": [
+        {
+          "location": [1, 0, 1, 5],
+          "kind": "expr|arg",
+          "name": "x",
+          "sampled_values": [{"type": "Integer", "preview": "1"}],
+          "types": {"Integer": 3},
+          "total": 3
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `version`:
+  - Payload schema version for the embedded HTML renderer. Current version is `1`.
+- `meta.mode`:
+  - Effective collect mode used for display (`last`, `types`, `history`).
+- `meta.mode_text`:
+  - Human-readable label shown in the HTML header.
+- `meta.max_samples`:
+  - Effective/inferred max samples for `history`; may be `null`.
+- `files[]`:
+  - One entry per rendered source file.
+- `files[].path`:
+  - Absolute path used internally to associate trace events with source.
+- `files[].display_path`:
+  - Path label shown in the HTML report (typically root-relative).
+- `files[].source`:
+  - Full Ruby source text for that file.
+- `files[].ranges`:
+  - Normalized line ranges as inclusive `[start_line, end_line]` pairs, or `null` when unrestricted.
+- `files[].trace[]`:
+  - Trace events for that file only (`file` is intentionally omitted from each event).
+- `files[].trace[].location`:
+  - Location tuple `[start_line, start_col, end_line, end_col]`.
+- `files[].trace[].kind`:
+  - Event kind (`expr` or `arg`).
+- `files[].trace[].name`:
+  - Argument name when `kind=arg`; otherwise `null`.
+- `files[].trace[].sampled_values`:
+  - Normalized sampled values (or synthesized `last_value` entry when collect mode is `last`).
+- `files[].trace[].types`:
+  - Type counts map, normalized as `{ "TypeName": count }`.
+- `files[].trace[].total`:
+  - Total execution count for the location.
+
 ### Copy/Paste Behavior
 
 - Inline icon uses a separate marker span to reduce copy/paste artifacts.
-- Lines are rendered as inline spans with explicit `\n` inserted.
+- Lines are rendered as per-line block spans to keep copy/paste artifacts small while preserving line alignment.
 
 ## Known Limitations
 
