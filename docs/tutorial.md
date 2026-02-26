@@ -130,6 +130,10 @@ HTML notes:
 - Argument values show `🧷` in HTML.
 - Lines where all instrumentable expressions are unexecuted are shaded light red; mixed lines only shade the unexecuted expressions.
 - When ranges are used, skipped sections are shown as `...` in the line-number column.
+- When multiple files are included, use the left file tree to switch files.
+- The file tree shows per-file line coverage as `(executed/expression-lines)`.
+- The selected file is stored in the URL hash (`#file=...`), so copying the URL shares a direct link to that file view.
+- Click a line number to update the URL with that line (`#file=...&line=...`) and open the same file+line later.
 
 ### Range example
 

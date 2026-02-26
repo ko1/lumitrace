@@ -275,6 +275,13 @@ lumitrace [options] exec CMD [args...]
   - `Mode: history (last N sample[s])`
   - In `history`, `N` uses configured `max_samples` when available; otherwise it is inferred from the loaded events.
 - Each file is shown in its own section.
+- When multiple files are present, the HTML UI shows a left file tree and a single-file viewer on the right.
+- Selecting a file in the tree switches the visible file without reloading the page.
+- The selected file is reflected in the URL hash as `#file=...` (using the rendered file path label) so links can open a specific file view.
+- Clicking a line number updates the URL hash to include the selected line (for example `#file=lib/foo.rb&line=42`).
+- When the HTML is opened with a file+line hash, the renderer selects that file and scrolls to the target line.
+- File tree items show line coverage as `(executed_lines / lines_with_expressions)` for a quick per-file overview.
+- Files with no instrumentable expressions do not show a coverage count.
 - Expressions are marked with an inline icon (`🔎` for executed, `∅` for not hit).
 - Hovering the icon shows recorded values.
 - Only the last 3 values are shown in the tooltip as `value (Type)`; additional values are summarized as `... (+N more)`.
@@ -331,6 +338,7 @@ lumitrace [options] exec CMD [args...]
   - Absolute path used internally to associate trace events with source.
 - `files[].display_path`:
   - Path label shown in the HTML report (typically root-relative).
+  - Multi-file HTML navigation and URL hash (`#file=...`, `#file=...&line=...`) use this value as the file key.
 - `files[].source`:
   - Full Ruby source text for that file.
 - `files[].ranges`:

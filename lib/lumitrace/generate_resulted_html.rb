@@ -100,13 +100,41 @@ module GenerateResultedHtml
   def self.html_report_styles
     <<~CSS
       body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f7f5f0; color: #1f1f1f; padding: 24px; }
+      .report-layout { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
+      .report-layout.single-file { grid-template-columns: minmax(0, 1fr); }
+      .report-sidebar { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 12px; position: sticky; top: 16px; max-height: calc(100vh - 48px); overflow: hidden; }
+      .report-layout.single-file .report-sidebar { display: none; }
+      .tree-title { color: #444; font-size: 12px; margin-bottom: 8px; }
+      .tree-scroll { overflow: auto; max-height: calc(100vh - 96px); }
+      .tree-list { list-style: none; margin: 0; padding: 0; }
+      .tree-list[data-level]:not([data-level="0"]) { margin-left: 14px; border-left: 1px dashed #e5dfd0; padding-left: 8px; }
+      .tree-dir, .tree-file { margin: 2px 0; }
+      .tree-folder { }
+      .tree-folder-label { cursor: pointer; color: #4d473f; user-select: none; }
+      .tree-folder-label::marker { color: #999; }
+      .tree-file-btn { width: 100%; text-align: left; border: 0; background: transparent; color: #2a2a2a; padding: 4px 6px; border-radius: 6px; cursor: pointer; font: inherit; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+      .tree-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tree-file-meta { color: #6f6a62; font-size: 12px; white-space: nowrap; }
+      .tree-file-btn:hover { background: #fff2c6; }
+      .tree-file-btn.active { background: #f0ffe7; color: #1b5e3d; }
+      .tree-file-btn.active .tree-file-meta { color: #1b5e3d; }
+      .report-main { min-width: 0; }
+      .report-main-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+      .current-file { color: #333; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .permalink { color: #2f6f8e; text-decoration: none; font-size: 12px; white-space: nowrap; }
+      .permalink:hover { text-decoration: underline; }
+      .report-viewer { min-width: 0; }
+      .file-section { min-width: 0; }
       .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
       .line { display: block; box-sizing: border-box; padding: 2px 8px; }
       .line:hover { background: #fff2c6; }
       .line.hit { background: #f0ffe7; }
       .line.miss { background: #ffecec; }
+      .line.line-target { box-shadow: inset 3px 0 #2f6f8e; background: #e9f4fb; }
       .line.ellipsis { color: #999; }
       .ln { display: inline-block; width: 3em; color: #888; user-select: none; }
+      .ln-link { color: inherit; text-decoration: none; }
+      .ln-link:hover { text-decoration: underline; color: #2f6f8e; }
       .hint { color: #666; margin-bottom: 4px; }
       .mode { color: #444; margin-bottom: 8px; }
       .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
@@ -145,6 +173,13 @@ module GenerateResultedHtml
       .marker:focus-within .tooltip,
       .marker .tooltip:hover { display: block; }
       .noscript { color: #666; }
+      @media (max-width: 900px) {
+        body { padding: 16px; }
+        .report-layout { grid-template-columns: 1fr; }
+        .report-sidebar { position: static; max-height: none; }
+        .tree-scroll { max-height: 220px; }
+        .report-main-head { flex-direction: column; align-items: flex-start; }
+      }
     CSS
   end
 
