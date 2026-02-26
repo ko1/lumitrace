@@ -47,7 +47,7 @@ module RecordInstrument
     Prism::GlobalVariableReadNode
   ].freeze
 
-  def self.instrument_source(src, ranges, file_label: nil, record_method: "Lumitrace::R")
+  def self.instrument_source(src, ranges, file_label: nil, record_method: "::Lumitrace::R")
     file_label ||= "(unknown)"
     ranges = normalize_ranges(ranges)
 
