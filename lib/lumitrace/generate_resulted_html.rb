@@ -91,6 +91,10 @@ module GenerateResultedHtml
   end
 
   def self.event_to_html_trace_payload(e)
+    sampled_values = e[:sampled_values]
+    if (sampled_values.nil? || sampled_values.empty?) && e[:last_value]
+      sampled_values = [e[:last_value]]
+    end
     {
       location: [
         e[:start_line].to_i,
@@ -100,7 +104,7 @@ module GenerateResultedHtml
       ],
       kind: (e[:kind] || "expr").to_s,
       name: e[:name],
-      sampled_values: e[:sampled_values] || [],
+      sampled_values: sampled_values || [],
       types: sorted_type_counts(e[:types]),
       total: e[:total].to_i
     }

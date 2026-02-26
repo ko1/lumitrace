@@ -454,6 +454,25 @@ class LumiTraceTest < Minitest::Test
     assert_equal "<obj>", normalized.first[:sampled_values].first["preview"]
   end
 
+  def test_event_to_html_trace_payload_uses_last_value_when_sampled_values_missing
+    payload = Lumitrace::GenerateResultedHtml.event_to_html_trace_payload(
+      {
+        start_line: 1,
+        start_col: 0,
+        end_line: 1,
+        end_col: 3,
+        kind: "expr",
+        last_value: { type: "String", preview: "\"x\"" },
+        types: { "String" => 2 },
+        total: 2
+      }
+    )
+
+    assert_equal [{ type: "String", preview: "\"x\"" }], payload[:sampled_values]
+    assert_equal({ "String" => 2 }, payload[:types])
+    assert_equal 2, payload[:total]
+  end
+
   def test_env_range_parsing
     with_env("LUMITRACE_RANGE" => "a.rb:1-3,5-6;b.rb", "LUMITRACE_COLLECT_MODE" => "types") do
       env = Lumitrace.resolve_env_options
