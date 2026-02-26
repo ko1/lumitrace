@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "shellwords"
 require "tmpdir"
 require_relative "lumitrace/version"
 require_relative "lumitrace/record_instrument"
@@ -32,6 +33,16 @@ module Lumitrace
   def self.verbose_log(message, level: 1)
     return unless @verbose_level && @verbose_level >= level
     $stderr.puts("[lumitrace] #{message}")
+  end
+
+  def self.current_command_text
+    argv0 = $0.to_s
+    args = Array(ARGV).map(&:to_s)
+    parts = []
+    parts << argv0 unless argv0.empty?
+    parts.concat(args)
+    return nil if parts.empty?
+    Shellwords.join(parts)
   end
 
   def self.normalize_collect_mode(mode)
@@ -509,7 +520,8 @@ module Lumitrace
               ranges_by_file: @atexit_ranges_by_file,
               collect_mode: @atexit_collect_mode,
               max_samples: @atexit_max_samples,
-              logger: detail_logger
+              logger: detail_logger,
+              command_text: current_command_text
             )
             html_render_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - html_render_start) * 1000.0
             out_path = @atexit_html == true ? "lumitrace_recorded.html" : @atexit_html

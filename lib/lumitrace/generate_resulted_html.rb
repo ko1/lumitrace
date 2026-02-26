@@ -55,14 +55,16 @@ module GenerateResultedHtml
       .gsub('"', "&quot;")
   end
 
-  def self.build_html_payload(mode_info:, files:)
+  def self.build_html_payload(mode_info:, files:, command_text: nil)
+    meta = {
+      mode: mode_info[:mode],
+      mode_text: mode_info[:text],
+      max_samples: mode_info[:max_samples]
+    }
+    meta[:command] = command_text if command_text && !command_text.to_s.empty?
     {
       version: 1,
-      meta: {
-        mode: mode_info[:mode],
-        mode_text: mode_info[:text],
-        max_samples: mode_info[:max_samples]
-      },
+      meta: meta,
       files: files
     }
   end
@@ -158,6 +160,7 @@ module GenerateResultedHtml
       .ln-link { color: inherit; text-decoration: none; }
       .ln-link:hover { text-decoration: underline; color: #2f6f8e; }
       .hint { color: #666; margin-bottom: 4px; }
+      .command { color: #555; margin-bottom: 4px; font-size: 12px; overflow-wrap: anywhere; }
       .mode { color: #444; margin-bottom: 8px; }
       .file { margin: 24px 0 8px; font-size: 16px; color: #333; }
       .expr { position: relative; display: inline-block; padding-bottom: 1px; }
@@ -641,7 +644,7 @@ module GenerateResultedHtml
     [expected_by_line, executed_by_line]
   end
 
-  def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil)
+  def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil, command_text: nil)
     raw_events = JSON.parse(File.read(events_path))
     render_all_from_events(
       raw_events,
@@ -649,11 +652,12 @@ module GenerateResultedHtml
       ranges_by_file: ranges_by_file,
       collect_mode: collect_mode,
       max_samples: max_samples,
-      logger: logger
+      logger: logger,
+      command_text: command_text
     )
   end
 
-  def self.render_all_from_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil)
+  def self.render_all_from_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil, command_text: nil)
     normalized = time_step("normalize_events", logger) { normalize_events(events) }
     render_all_from_normalized_events(
       normalized,
@@ -661,11 +665,12 @@ module GenerateResultedHtml
       ranges_by_file: ranges_by_file,
       collect_mode: collect_mode,
       max_samples: max_samples,
-      logger: logger
+      logger: logger,
+      command_text: command_text
     )
   end
 
-  def self.render_all_from_normalized_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil)
+  def self.render_all_from_normalized_events(events, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil, command_text: nil)
     total_start = monotonic_now
 
     mode_info = time_step("resolve_mode", logger) do
@@ -707,7 +712,7 @@ module GenerateResultedHtml
       end
     end
 
-    payload = time_step("build_payload", logger) { build_html_payload(mode_info: mode_info, files: files) }
+    payload = time_step("build_payload", logger) { build_html_payload(mode_info: mode_info, files: files, command_text: command_text) }
     html = time_step("render_payload_html", logger) { render_payload_html(payload) }
     if logger
       total_ms = (monotonic_now - total_start) * 1000.0
@@ -716,24 +721,26 @@ module GenerateResultedHtml
     html
   end
 
-  def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil)
+  def self.render_source_from_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil, command_text: nil)
     render_source_from_normalized_events(
       source,
       normalize_events(events),
       filename: filename,
       ranges: ranges,
       collect_mode: collect_mode,
-      max_samples: max_samples
+      max_samples: max_samples,
+      command_text: command_text
     )
   end
 
-  def self.render_source_from_normalized_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil)
+  def self.render_source_from_normalized_events(source, events, filename: "script.rb", ranges: nil, collect_mode: nil, max_samples: nil, command_text: nil)
     mode_info = resolve_mode_info(events, collect_mode: collect_mode, max_samples: max_samples)
     ranges = normalize_ranges(ranges)
     target_events = events.select { |e| e[:file] == filename }
 
     payload = build_html_payload(
       mode_info: mode_info,
+      command_text: command_text,
       files: [
         build_html_payload_file(
           path: filename,

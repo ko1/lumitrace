@@ -473,6 +473,16 @@ class LumiTraceTest < Minitest::Test
     assert_equal 2, payload[:total]
   end
 
+  def test_build_html_payload_includes_command_text
+    payload = Lumitrace::GenerateResultedHtml.build_html_payload(
+      mode_info: { mode: "last", text: "Mode: last (last value)", max_samples: nil },
+      files: [],
+      command_text: "ruby script.rb arg1"
+    )
+
+    assert_equal "ruby script.rb arg1", payload[:meta][:command]
+  end
+
   def test_env_range_parsing
     with_env("LUMITRACE_RANGE" => "a.rb:1-3,5-6;b.rb", "LUMITRACE_COLLECT_MODE" => "types") do
       env = Lumitrace.resolve_env_options
