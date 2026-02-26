@@ -1963,9 +1963,17 @@ module GenerateResultedHtml
     const hash = buildHashForSelection(fileKey, line);
     if (window.location.hash === hash) return;
     if (window.history && typeof window.history.replaceState === "function") {
-      window.history.replaceState(null, "", hash);
-    } else {
+      try {
+        window.history.replaceState(null, "", hash);
+        return;
+      } catch (_e) {
+        // `about:srcdoc` (runv preview) can reject replaceState with a file:// hash URL.
+      }
+    }
+    try {
       window.location.hash = hash;
+    } catch (_e) {
+      // Ignore hash update failures in restricted embedding contexts.
     }
   }
 
@@ -2141,12 +2149,6 @@ module GenerateResultedHtml
     currentPath.className = "current-file";
     mainHead.appendChild(currentPath);
 
-    const permalink = document.createElement("a");
-    permalink.className = "permalink";
-    permalink.textContent = "Permalink";
-    permalink.href = "#";
-    mainHead.appendChild(permalink);
-
     const viewer = document.createElement("div");
     viewer.className = "report-viewer";
     main.appendChild(viewer);
@@ -2169,9 +2171,6 @@ module GenerateResultedHtml
       if (!entry) return;
 
       currentPath.textContent = fileDisplayPath(entry.file, entry.idx);
-      const hash = buildHashForSelection(selectedKey, selectedLine);
-      permalink.href = hash;
-      permalink.title = hash;
 
       viewer.appendChild(renderFileSection(entry.file, entry.idx, {
         includeTitle: false,
@@ -2250,8 +2249,6 @@ end
       .report-main { min-width: 0; }
       .report-main-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
       .current-file { color: #333; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .permalink { color: #2f6f8e; text-decoration: none; font-size: 12px; white-space: nowrap; }
-      .permalink:hover { text-decoration: underline; }
       .report-viewer { min-width: 0; }
       .file-section { min-width: 0; }
       .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
@@ -2283,8 +2280,8 @@ end
         display: none;
         position: absolute;
         left: 0;
-        top: 100%;
-        margin-top: 4px;
+        bottom: 100%;
+        margin-bottom: 6px;
         background: #2b2b2b;
         color: #fff;
         padding: 4px 6px;

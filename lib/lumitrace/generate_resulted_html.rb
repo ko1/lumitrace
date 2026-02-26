@@ -141,8 +141,6 @@ module GenerateResultedHtml
       .report-main { min-width: 0; }
       .report-main-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
       .current-file { color: #333; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .permalink { color: #2f6f8e; text-decoration: none; font-size: 12px; white-space: nowrap; }
-      .permalink:hover { text-decoration: underline; }
       .report-viewer { min-width: 0; }
       .file-section { min-width: 0; }
       .code { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 16px; line-height: 1.5; }
@@ -174,8 +172,8 @@ module GenerateResultedHtml
         display: none;
         position: absolute;
         left: 0;
-        top: 100%;
-        margin-top: 4px;
+        bottom: 100%;
+        margin-bottom: 6px;
         background: #2b2b2b;
         color: #fff;
         padding: 4px 6px;
