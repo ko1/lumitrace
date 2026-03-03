@@ -139,6 +139,65 @@ HTML notes:
 - The header also shows `Command: ...` for CLI-generated reports.
 - The footer shows the Lumitrace version that generated the report.
 
+### Using with AI agents
+
+When a test fails, you can use Lumitrace to capture runtime values and pass the results to an AI for efficient debugging.
+
+**Typical scenario:**
+
+1. A test fails
+2. Run the test with Lumitrace to record runtime values
+3. Pass the results to an AI to analyze the root cause
+
+```bash
+# Run tests with lumitrace and get JSON output
+lumitrace --collect-mode last -j exec rake test
+
+# Pass the resulting JSON to your AI
+```
+
+**Snippet for CLAUDE.md / AGENTS.md:**
+
+Add the following to your project's `CLAUDE.md` or `AGENTS.md` so AI agents can leverage Lumitrace:
+
+````markdown
+## Debugging (Lumitrace)
+lumitrace is a tool that records runtime values of each Ruby expression.
+When a test fails, read `lumitrace help` first, then use it.
+Basic: `lumitrace -t exec rake test`
+````
+
+**Gradual approach (save tokens):**
+
+When feeding results to an AI, this order is efficient:
+
+1. Start with type distributions (cheap overview)
+
+```bash
+lumitrace --collect-mode types -j path/to/entry.rb
+```
+
+2. Then check last values (get a feel for the data)
+
+```bash
+lumitrace --collect-mode last -j path/to/entry.rb
+```
+
+3. Look at history only where changes are needed
+
+```bash
+lumitrace --collect-mode history --max-samples 5 -j path/to/entry.rb
+```
+
+4. Narrow the scope (save tokens)
+
+```bash
+lumitrace --collect-mode last -j --range path/to/entry.rb:120-180 path/to/entry.rb
+lumitrace --collect-mode last -j -g path/to/entry.rb
+```
+
+Machine-readable help is available via `lumitrace help --format json` and `lumitrace schema --format json`.
+
 ### Range example
 
 When a full run is too noisy, narrow the scope to specific line ranges so you can focus on the slice you care about.

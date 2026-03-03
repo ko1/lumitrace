@@ -67,7 +67,8 @@ lumitrace help --format json
 lumitrace schema --format json
 ```
 
-AI-oriented usage guide (Japanese):
+AI-oriented usage guide:
+- `docs/tutorial.md` section "Using with AI agents"
 - `docs/tutorial.ja.md` section "AI と使う"
 
 ### Library
