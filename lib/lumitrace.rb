@@ -13,6 +13,8 @@ require_relative "lumitrace/ai_docs"
 
 module Lumitrace
   class Error < StandardError; end
+  KERNEL_CLASS = ::Kernel.instance_method(:class)
+
   @atexit_registered = false
   @atexit_output_root = nil
   @atexit_ranges_by_file = nil
@@ -62,7 +64,7 @@ module Lumitrace
           def R(id, value)
             events_by_id = RecordInstrument.events_by_id
             entry = events_by_id[id]
-            klass = value.class
+            klass = KERNEL_CLASS.bind_call(value)
             type = klass.name
             type = klass.to_s if type.nil? || type.empty?
             if entry
@@ -81,7 +83,7 @@ module Lumitrace
           def R(id, value)
             events_by_id = RecordInstrument.events_by_id
             entry = events_by_id[id]
-            klass = value.class
+            klass = KERNEL_CLASS.bind_call(value)
             type = klass.name
             type = klass.to_s if type.nil? || type.empty?
             if entry
@@ -99,7 +101,7 @@ module Lumitrace
           def R(id, value)
             events_by_id = RecordInstrument.events_by_id
             entry = events_by_id[id]
-            klass = value.class
+            klass = KERNEL_CLASS.bind_call(value)
             type = klass.name
             type = klass.to_s if type.nil? || type.empty?
             if entry

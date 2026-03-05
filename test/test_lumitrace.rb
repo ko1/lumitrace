@@ -499,6 +499,98 @@ class LumiTraceTest < Minitest::Test
     assert_equal "ruby script.rb arg1", payload[:meta][:command]
   end
 
+  def test_value_type_name_with_basic_object
+    klass = Class.new(BasicObject)
+    obj = klass.new
+    type = Lumitrace::RecordInstrument.value_type_name(obj)
+    refute_nil type
+    refute_empty type
+  end
+
+  def test_summarize_value_with_basic_object
+    klass = Class.new(BasicObject)
+    obj = klass.new
+    summary = Lumitrace::RecordInstrument.summarize_value(obj)
+    assert summary.is_a?(Hash)
+    assert summary.key?(:type)
+    assert summary.key?(:preview)
+    refute_nil summary[:type]
+    refute_empty summary[:type]
+  end
+
+  def test_R_with_basic_object_last_mode
+    with_record_instrument_state do
+      mod = Lumitrace::RecordInstrument
+      mod.instance_variable_set(:@events_by_id, [])
+      mod.instance_variable_set(:@loc_by_id, [])
+      mod.instance_variable_set(:@next_id, 0)
+      Lumitrace.install_collect_mode("last")
+
+      id = mod.register_location(
+        "a.rb",
+        { start_line: 1, start_col: 0, end_line: 1, end_col: 1 },
+        kind: :expr
+      )
+
+      klass = Class.new(BasicObject)
+      obj = klass.new
+      result = Lumitrace::R(id, obj)
+      assert_same obj, result
+
+      events = mod.events_from_ids
+      assert_equal 1, events.first[:total]
+      refute_empty events.first[:types]
+    end
+  end
+
+  def test_R_with_basic_object_history_mode
+    with_record_instrument_state do
+      mod = Lumitrace::RecordInstrument
+      mod.instance_variable_set(:@events_by_id, [])
+      mod.instance_variable_set(:@loc_by_id, [])
+      mod.instance_variable_set(:@next_id, 0)
+      Lumitrace.install_collect_mode("history")
+      mod.max_samples_per_expr = 3
+
+      id = mod.register_location(
+        "a.rb",
+        { start_line: 1, start_col: 0, end_line: 1, end_col: 1 },
+        kind: :expr
+      )
+
+      klass = Class.new(BasicObject)
+      Lumitrace::R(id, klass.new)
+      Lumitrace::R(id, 42)
+
+      events = mod.events_from_ids
+      assert_equal 2, events.first[:total]
+      assert_equal 2, events.first[:sampled_values].length
+    end
+  end
+
+  def test_R_with_basic_object_types_mode
+    with_record_instrument_state do
+      mod = Lumitrace::RecordInstrument
+      mod.instance_variable_set(:@events_by_id, [])
+      mod.instance_variable_set(:@loc_by_id, [])
+      mod.instance_variable_set(:@next_id, 0)
+      Lumitrace.install_collect_mode("types")
+
+      id = mod.register_location(
+        "a.rb",
+        { start_line: 1, start_col: 0, end_line: 1, end_col: 1 },
+        kind: :expr
+      )
+
+      klass = Class.new(BasicObject)
+      Lumitrace::R(id, klass.new)
+
+      events = mod.events_from_ids
+      assert_equal 1, events.first[:total]
+      refute_empty events.first[:types]
+    end
+  end
+
   def test_env_range_parsing
     with_env("LUMITRACE_RANGE" => "a.rb:1-3,5-6;b.rb", "LUMITRACE_COLLECT_MODE" => "types") do
       env = Lumitrace.resolve_env_options

@@ -686,25 +686,34 @@ module RecordInstrument
     events_from_ids
   end
 
+  KERNEL_INSPECT = ::Kernel.instance_method(:inspect)
+
+  def self.safe_inspect(v)
+    v.inspect
+  rescue ::NoMethodError
+    KERNEL_INSPECT.bind_call(v)
+  end
+
   def self.safe_value(v)
     case v
     when Numeric, TrueClass, FalseClass, NilClass
       v
     else
-      s = v.inspect
+      s = safe_inspect(v)
       s.bytesize > 1000 ? s[0, 1000] + "..." : s
     end
   end
 
   def self.value_type_name(v)
-    name = v.class.name
-    name && !name.empty? ? name : v.class.to_s
+    klass = ::Lumitrace::KERNEL_CLASS.bind_call(v)
+    name = klass.name
+    name && !name.empty? ? name : klass.to_s
   end
 
   def self.summarize_value(v, type: nil)
     type ||= value_type_name(v)
     preview_limit = 120
-    inspected = v.inspect
+    inspected = safe_inspect(v)
     if inspected.length > preview_limit
       {
         type: type,
