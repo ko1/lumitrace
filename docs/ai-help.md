@@ -2,7 +2,7 @@
 
 # Lumitrace Help
 
-- Version: 0.4.1
+- Version: 0.6.1
 - Help version: 1
 - Primary JSON entrypoint: `lumitrace help --format json`
 - Schema JSON entrypoint: `lumitrace schema --format json`
@@ -37,11 +37,16 @@
 ## Key Options
 - `--collect-mode` (default="last"; values=last,types,history)
 - `--max-samples` (default=3; Used by history mode.)
-- `--json[=PATH]` (Emit JSON output.)
-- `--html[=PATH]` (Emit HTML output.)
-- `--text[=PATH]` (Emit text output.)
+- `-j, --json[=PATH]` (Emit JSON output.)
+- `-h, --html[=PATH]` (Emit HTML output.)
+- `-t, --text[=PATH]` (Emit text output.)
+- `-g, --git-diff[=MODE]` (Restrict instrumentation to diff hunks.)
 - `--range SPEC` (repeatable=true; Restrict instrumentation to file ranges.)
-- `--git-diff[=MODE]` (Restrict instrumentation to diff hunks.)
+- `--git-diff-context N` (Expand diff hunks by +/-N lines.)
+- `--git-cmd PATH` (Git executable for diff.)
+- `--git-diff-no-untracked` (Exclude untracked files from diff.)
+- `--root PATH` (Root directory for instrumentation.)
+- `--verbose[=LEVEL]` (Verbose logs to stderr (level 1-3).)
 
 ## Examples
 - `lumitrace --collect-mode history --max-samples 5 -j app.rb`

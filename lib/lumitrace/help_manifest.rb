@@ -56,11 +56,16 @@ module Lumitrace
       key_options: [
         { name: "--collect-mode", values: COLLECT_MODES, default: "last" },
         { name: "--max-samples", type: "Integer", default: 3, note: "Used by history mode." },
-        { name: "--json[=PATH]", type: "bool|string", note: "Emit JSON output." },
-        { name: "--html[=PATH]", type: "bool|string", note: "Emit HTML output." },
-        { name: "--text[=PATH]", type: "bool|string", note: "Emit text output." },
+        { name: "-j, --json[=PATH]", type: "bool|string", note: "Emit JSON output." },
+        { name: "-h, --html[=PATH]", type: "bool|string", note: "Emit HTML output." },
+        { name: "-t, --text[=PATH]", type: "bool|string", note: "Emit text output." },
+        { name: "-g, --git-diff[=MODE]", type: "string", note: "Restrict instrumentation to diff hunks." },
         { name: "--range SPEC", type: "string", repeatable: true, note: "Restrict instrumentation to file ranges." },
-        { name: "--git-diff[=MODE]", type: "string", note: "Restrict instrumentation to diff hunks." }
+        { name: "--git-diff-context N", type: "Integer", note: "Expand diff hunks by +/-N lines." },
+        { name: "--git-cmd PATH", type: "string", note: "Git executable for diff." },
+        { name: "--git-diff-no-untracked", type: "bool", note: "Exclude untracked files from diff." },
+        { name: "--root PATH", type: "string", note: "Root directory for instrumentation." },
+        { name: "--verbose[=LEVEL]", type: "Integer", note: "Verbose logs to stderr (level 1-3)." }
       ],
       outputs: [
         { kind: "json", default_path: "lumitrace_recorded.json" },

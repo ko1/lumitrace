@@ -9,8 +9,18 @@ module Lumitrace
       tool: "lumitrace",
       version: VERSION,
       json_top_level: {
-        type: "array",
-        items: "event"
+        type: "object",
+        fields: {
+          version: { type: "integer", description: "Schema version number." },
+          events: { type: "array", items: "event", description: "Traced expression events." },
+          coverage: { type: "array", items: "coverage_entry", description: "Per-file coverage summary." }
+        }
+      },
+      coverage_entry_fields: {
+        file: { type: "string", required: true, description: "Absolute source path." },
+        total_lines: { type: "integer", required: true, description: "Number of traced expression lines." },
+        covered_lines: { type: "integer", required: true, description: "Lines with total > 0." },
+        coverage_percent: { type: "float", required: true, description: "Covered / total * 100, rounded to 1 decimal." }
       },
       event_common_fields: {
         file: { type: "string", required: true, description: "Absolute source path." },
@@ -20,7 +30,7 @@ module Lumitrace
         end_col: { type: "integer", required: true },
         kind: { type: "string", required: true, enum: %w[expr arg] },
         name: { type: ["string", "null"], required: false, description: "Present for kind=arg." },
-        total: { type: "integer", required: true, description: "Execution count." },
+        total: { type: "integer", required: true, description: "Execution count. 0 means the expression was never executed (uncovered)." },
         types: {
           type: "object",
           required: true,

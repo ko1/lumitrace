@@ -70,7 +70,17 @@ module Lumitrace
     lines << ""
     lines << "- Version: #{data[:version]}"
     lines << "- Schema version: #{data[:schema_version]}"
-    lines << "- Top level: #{data[:json_top_level][:type]} of #{data[:json_top_level][:items]}"
+    top = data[:json_top_level]
+    if top[:type] == "object" && top[:fields]
+      lines << "- Top level: #{top[:type]}"
+      top[:fields].each do |name, spec|
+        type_text = spec[:items] ? "#{spec[:type]} of #{spec[:items]}" : spec[:type].to_s
+        desc = spec[:description] ? " - #{spec[:description]}" : ""
+        lines << "  - `#{name}` (#{type_text})#{desc}"
+      end
+    else
+      lines << "- Top level: #{top[:type]} of #{top[:items]}"
+    end
     lines << ""
     lines << "## Common Event Fields"
     data[:event_common_fields].each do |name, spec|
@@ -78,6 +88,16 @@ module Lumitrace
       type_text = Array(spec[:type]).join("|")
       desc = spec[:description] ? " - #{spec[:description]}" : ""
       lines << "- `#{name}` (#{type_text}, #{req})#{desc}"
+    end
+    if data[:coverage_entry_fields]
+      lines << ""
+      lines << "## Coverage Entry Fields"
+      data[:coverage_entry_fields].each do |name, spec|
+        req = spec[:required] ? "required" : "optional"
+        type_text = Array(spec[:type]).join("|")
+        desc = spec[:description] ? " - #{spec[:description]}" : ""
+        lines << "- `#{name}` (#{type_text}, #{req})#{desc}"
+      end
     end
     lines << ""
     lines << "## Value Summary Fields"

@@ -2,9 +2,12 @@
 
 # Lumitrace JSON Schema
 
-- Version: 0.4.1
+- Version: 0.6.1
 - Schema version: 1
-- Top level: array of event
+- Top level: object
+  - `version` (integer) - Schema version number.
+  - `events` (array of event) - Traced expression events.
+  - `coverage` (array of coverage_entry) - Per-file coverage summary.
 
 ## Common Event Fields
 - `file` (string, required) - Absolute source path.
@@ -14,8 +17,14 @@
 - `end_col` (integer, required)
 - `kind` (string, required)
 - `name` (string|null, optional) - Present for kind=arg.
-- `total` (integer, required) - Execution count.
+- `total` (integer, required) - Execution count. 0 means the expression was never executed (uncovered).
 - `types` (object, required) - Ruby class name => observed count.
+
+## Coverage Entry Fields
+- `file` (string, required) - Absolute source path.
+- `total_lines` (integer, required) - Number of traced expression lines.
+- `covered_lines` (integer, required) - Lines with total > 0.
+- `coverage_percent` (float, required) - Covered / total * 100, rounded to 1 decimal.
 
 ## Value Summary Fields
 - `type` (string, required) - Ruby class name.
