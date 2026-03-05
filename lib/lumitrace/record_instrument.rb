@@ -495,8 +495,40 @@ module RecordInstrument
 
   def self.dump_events_json(events, path = nil)
     path ||= File.expand_path("lumitrace_recorded.json", Dir.pwd)
-    File.write(path, JSON.dump(events), perm: 0o600)
+    payload = {
+      version: 1,
+      events: events,
+      coverage: compute_coverage(events)
+    }
+    File.write(path, JSON.dump(payload), perm: 0o600)
     path
+  end
+
+  def self.compute_coverage(events)
+    by_file = {}
+    events.each do |e|
+      file = e[:file] || e["file"]
+      next unless file
+      total = e[:total] || e["total"] || 0
+      start_line = e[:start_line] || e["start_line"]
+      next unless start_line
+
+      entry = (by_file[file] ||= { lines: {}, covered_lines: {} })
+      entry[:lines][start_line] = true
+      entry[:covered_lines][start_line] = true if total > 0
+    end
+
+    by_file.map do |file, entry|
+      total_lines = entry[:lines].size
+      covered_lines = entry[:covered_lines].size
+      pct = total_lines > 0 ? (covered_lines * 100.0 / total_lines).round(1) : 0.0
+      {
+        file: file,
+        total_lines: total_lines,
+        covered_lines: covered_lines,
+        coverage_percent: pct
+      }
+    end.sort_by { |e| e[:file] }
   end
 
   def self.load_events_json(path)
@@ -704,8 +736,10 @@ module RecordInstrument
     end
   end
 
+  KERNEL_CLASS = ::Kernel.instance_method(:class)
+
   def self.value_type_name(v)
-    klass = ::Lumitrace::KERNEL_CLASS.bind_call(v)
+    klass = KERNEL_CLASS.bind_call(v)
     name = klass.name
     name && !name.empty? ? name : klass.to_s
   end

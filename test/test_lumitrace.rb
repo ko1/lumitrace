@@ -591,6 +591,72 @@ class LumiTraceTest < Minitest::Test
     end
   end
 
+  def test_compute_coverage
+    events = [
+      { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 5, total: 3 },
+      { file: "a.rb", start_line: 2, start_col: 0, end_line: 2, end_col: 5, total: 0 },
+      { file: "a.rb", start_line: 3, start_col: 0, end_line: 3, end_col: 5, total: 1 },
+      { file: "b.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 5, total: 0 }
+    ]
+    coverage = Lumitrace::RecordInstrument.compute_coverage(events)
+    assert_equal 2, coverage.length
+
+    a = coverage.find { |c| c[:file] == "a.rb" }
+    assert_equal 3, a[:total_lines]
+    assert_equal 2, a[:covered_lines]
+    assert_equal 66.7, a[:coverage_percent]
+
+    b = coverage.find { |c| c[:file] == "b.rb" }
+    assert_equal 1, b[:total_lines]
+    assert_equal 0, b[:covered_lines]
+    assert_equal 0.0, b[:coverage_percent]
+  end
+
+  def test_dump_events_json_wrapped_format
+    Dir.mktmpdir do |dir|
+      events = [
+        { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 5, total: 1 }
+      ]
+      path = File.join(dir, "out.json")
+      Lumitrace::RecordInstrument.dump_events_json(events, path)
+      data = JSON.parse(File.read(path))
+
+      assert_equal 1, data["version"]
+      assert data.key?("events")
+      assert data.key?("coverage")
+      assert_equal 1, data["events"].length
+      assert_equal 1, data["coverage"].length
+      assert_equal 100.0, data["coverage"][0]["coverage_percent"]
+    end
+  end
+
+  def test_render_all_reads_wrapped_json
+    Dir.mktmpdir do |dir|
+      sample = File.join(dir, "sample.rb")
+      File.write(sample, "puts hi\n")
+      events_path = File.join(dir, "events.json")
+      payload = {
+        "version" => 1,
+        "events" => [
+          {
+            "file" => sample,
+            "start_line" => 1,
+            "start_col" => 0,
+            "end_line" => 1,
+            "end_col" => 5,
+            "sampled_values" => ["ok"],
+            "total" => 1
+          }
+        ],
+        "coverage" => []
+      }
+      File.write(events_path, JSON.dump(payload))
+
+      html = Lumitrace::GenerateResultedHtml.render_all(events_path, root: dir)
+      assert_includes html, "sample.rb"
+    end
+  end
+
   def test_env_range_parsing
     with_env("LUMITRACE_RANGE" => "a.rb:1-3,5-6;b.rb", "LUMITRACE_COLLECT_MODE" => "types") do
       env = Lumitrace.resolve_env_options

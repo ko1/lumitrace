@@ -25,7 +25,8 @@ module GenerateResultedHtml
       abort "missing #{source_path}"
     end
 
-    raw_events = JSON.parse(File.read(events_path))
+    raw = JSON.parse(File.read(events_path))
+    raw_events = raw.is_a?(Hash) && raw.key?("events") ? raw["events"] : raw
     src = File.read(source_path)
     mode_info = resolve_mode_info(raw_events, collect_mode: collect_mode, max_samples: max_samples)
     normalized_ranges = normalize_ranges(ranges)
@@ -654,7 +655,8 @@ module GenerateResultedHtml
   end
 
   def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil, command_text: nil)
-    raw_events = JSON.parse(File.read(events_path))
+    raw = JSON.parse(File.read(events_path))
+    raw_events = raw.is_a?(Hash) && raw.key?("events") ? raw["events"] : raw
     render_all_from_events(
       raw_events,
       root: root,

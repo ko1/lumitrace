@@ -167,7 +167,21 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 
 ### Output JSON
 
-`lumitrace_recorded.json` contains an array of entries.
+`lumitrace_recorded.json` is a JSON object with the following top-level structure:
+
+```json
+{
+  "version": 1,
+  "events": [ ... ],
+  "coverage": [ ... ]
+}
+```
+
+- `version`: Schema version (currently `1`).
+- `events`: Array of trace event entries (see below).
+- `coverage`: Array of per-file coverage summaries (see below).
+
+#### Event entries
 
 `collect_mode=last` (default):
 
@@ -226,6 +240,24 @@ Lumitrace instruments Ruby source code at load time (via `RubyVM::InstructionSeq
 - `last_value`: summary of the last observed value: `{ type, preview }` (+ `length` only when truncated).
 - `types`: observed Ruby class counts (class name => count).
 - `sampled_values`: retained sample (last N values) of summary objects (`{ type, preview }` + optional `length`) in `history` mode.
+- `total`: total execution count. When `0`, the expression was instrumented but never executed (uncovered).
+
+#### Coverage summary
+
+Each entry in the `coverage` array summarizes line-level coverage for one file:
+
+```json
+{
+  "file": "/path/to/file.rb",
+  "total_lines": 18,
+  "covered_lines": 12,
+  "coverage_percent": 66.7
+}
+```
+
+- `total_lines`: number of lines that contain at least one instrumented expression.
+- `covered_lines`: number of those lines where at least one expression has `total > 0`.
+- `coverage_percent`: `covered_lines / total_lines * 100`, rounded to one decimal place.
 
 ## CLI
 
