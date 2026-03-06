@@ -2,6 +2,8 @@
 
 # Lumitrace Help
 
+AI agents: run `lumitrace help --format json` to get structured help.
+
 - Version: 0.6.1
 - Help version: 1
 - Primary JSON entrypoint: `lumitrace help --format json`

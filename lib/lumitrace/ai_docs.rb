@@ -20,6 +20,8 @@ module Lumitrace
     lines = []
     lines << "# Lumitrace Help"
     lines << ""
+    lines << "AI agents: run `lumitrace help --format json` to get structured help."
+    lines << ""
     lines << "- Version: #{data[:version]}"
     lines << "- Help version: #{data[:help_version]}"
     lines << "- Primary JSON entrypoint: `#{data[:entrypoint][:primary]}`"

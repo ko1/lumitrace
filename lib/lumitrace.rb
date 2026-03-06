@@ -305,6 +305,8 @@ module Lumitrace
       if allow_help
         o.separator ""
         o.on("--help", "Show this help") { opts[:help] = true }
+        o.separator ""
+        o.separator "For AI/structured help: lumitrace help --format json"
       end
     end
 
