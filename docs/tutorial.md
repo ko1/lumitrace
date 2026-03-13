@@ -325,7 +325,7 @@ lumitrace -t path/to/entry.rb
 Send text output to a file when you want to archive results or attach them to CI artifacts.
 
 ```bash
-lumitrace --text=/tmp/lumi.txt path/to/entry.rb
+lumitrace --text /tmp/lumi.txt path/to/entry.rb
 ```
 
 
@@ -342,7 +342,7 @@ lumitrace -t -h path/to/entry.rb
 Wrap another command (like tests) so Lumitrace instruments what that command runs.
 
 ```bash
-lumitrace --html=sample/lumitrace_rake.html exec rake
+lumitrace --html sample/lumitrace_rake.html exec rake
 ```
 
 HTML output:
@@ -422,7 +422,7 @@ require "lumitrace"
 You can also pass CLI-style options via `LUMITRACE_ENABLE`:
 
 ```ruby
-ENV["LUMITRACE_ENABLE"] = "-t --html=/tmp/lumi.html -j"
+ENV["LUMITRACE_ENABLE"] = "-t --html /tmp/lumi.html -j"
 require "lumitrace"
 ```
 

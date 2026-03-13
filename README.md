@@ -52,7 +52,7 @@ Write JSON output explicitly:
 
 ```bash
 lumitrace -j path/to/entry.rb
-lumitrace --json=out/lumitrace_recorded.json path/to/entry.rb
+lumitrace --json out/lumitrace_recorded.json path/to/entry.rb
 ```
 
 Restrict to specific line ranges:
@@ -96,10 +96,10 @@ require "lumitrace/enable"
 
 ## Output
 
-- Text: printed by default; use `--text=PATH` to write to a file.
-- HTML: `lumitrace_recorded.html` by default, or `--html=PATH`.
+- Text: printed by default; use `--text PATH` to write to a file.
+- HTML: `lumitrace_recorded.html` by default, or `--html PATH`.
 - JSON: written only when `--json` (CLI) or `LUMITRACE_JSON` (library/CLI) is provided. Default filename is `lumitrace_recorded.json`.
-- JSON collection mode: `--collect-mode=last|types|history` (default `last`).
+- JSON collection mode: `--collect-mode last|types|history` (default `last`).
 - Fork/exec: merged by default. Child processes write fragments under `LUMITRACE_RESULTS_DIR`.
 
 JSON event entries always include `types` (type-name => count).

@@ -42,7 +42,7 @@ steps:
   - name: Run tests with Lumitrace
     env:
       LUMITRACE_GIT_DIFF: range:origin/${{ github.base_ref }}...HEAD
-    run: bundle exec lumitrace -v -t --html=lumitrace_recorded.html exec rake test
+    run: bundle exec lumitrace -v -t --html lumitrace_recorded.html exec rake test
 
   - name: Prepare Pages content
     run: |

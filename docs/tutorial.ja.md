@@ -325,7 +325,7 @@ lumitrace -t path/to/entry.rb
 CI アーティファクトなどに残したいときに便利です。
 
 ```bash
-lumitrace --text=/tmp/lumi.txt path/to/entry.rb
+lumitrace --text /tmp/lumi.txt path/to/entry.rb
 ```
 
 
@@ -342,7 +342,7 @@ lumitrace -t -h path/to/entry.rb
 テストなど別コマンドをラップして計測します。
 
 ```bash
-lumitrace --html=sample/lumitrace_rake.html exec rake
+lumitrace --html sample/lumitrace_rake.html exec rake
 ```
 
 HTML 出力:
@@ -423,7 +423,7 @@ require "lumitrace"
 `LUMITRACE_ENABLE` に CLI 互換のオプションを渡すこともできます:
 
 ```ruby
-ENV["LUMITRACE_ENABLE"] = "-t --html=/tmp/lumi.html -j"
+ENV["LUMITRACE_ENABLE"] = "-t --html /tmp/lumi.html -j"
 require "lumitrace"
 ```
 

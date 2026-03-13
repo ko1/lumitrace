@@ -269,9 +269,9 @@ lumitrace [options] exec CMD [args...]
 ```
 
 - Text is rendered by default (from in-memory events; no JSON file is required).
-- `-t` enables text output to stdout. `--text=PATH` writes to a file.
-- `-h` enables HTML output (default path). `--html=PATH` writes to a file.
-- `-j` enables JSON output (default path). `--json=PATH` writes to a file.
+- `-t` enables text output to stdout. `--text PATH` writes to a file.
+- `-h` enables HTML output (default path). `--html PATH` writes to a file.
+- `-j` enables JSON output (default path). `--json PATH` writes to a file.
 - `-g` enables git diff with `working` mode. `--git-diff=MODE` selects `staged|base:REV|range:SPEC`.
 - `--max-samples` sets max samples per expression in `collect_mode=history`.
 - `--collect-mode` sets value collection mode (`last|types|history`).
