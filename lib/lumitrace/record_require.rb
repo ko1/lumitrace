@@ -94,7 +94,7 @@ if defined?(RubyVM::InstructionSequence)
         return recordrequire_orig_translate(iseq) if respond_to?(:recordrequire_orig_translate) && !RecordRequire.enabled?
         path = iseq.path
         abs = File.expand_path(path)
-        if RecordRequire.in_root?(abs) && !RecordRequire.excluded?(abs) && !RecordRequire.already_processed?(abs) &&
+        if RecordRequire.in_root?(abs) && File.file?(abs) && !RecordRequire.excluded?(abs) && !RecordRequire.already_processed?(abs) &&
            (iseq.label == "<main>" || iseq.label == "<top (required)>")
           if RecordRequire.ranges_filtering? && !RecordRequire.listed_file?(abs)
             return recordrequire_orig_translate(iseq) if respond_to?(:recordrequire_orig_translate)

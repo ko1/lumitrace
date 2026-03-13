@@ -58,6 +58,33 @@ if args.empty?
   exit 1
 end
 
+# (1) Auto-correct: `-h output.html ...` or `-j output.json ...`
+#     OptionParser with optional argument (`[=PATH]`) does not consume
+#     the next positional token, so the output path ends up in `args`.
+{html: ".html", json: ".json"}.each do |opt_key, ext|
+  if opts[opt_key] == true && args.first&.end_with?(ext)
+    path = args.shift
+    warn "lumitrace: treating '#{path}' as #{ext.delete(".")} output path (use --#{ext.delete(".")}=PATH to be explicit)"
+    opts[opt_key] = path
+  end
+end
+
+if args.empty?
+  warn parser.to_s
+  exit 1
+end
+
+# (2) Auto-correct: `lumitrace [options] ruby ...` -> exec mode
+#     If the first remaining arg is not `exec` and not a `.rb` file,
+#     check whether it looks like an external command.
+if args[0] != "exec" && !args[0].end_with?(".rb")
+  cmd = args[0]
+  if system("command -v #{cmd} > /dev/null 2>&1")
+    warn "lumitrace: auto-inserting 'exec' before '#{cmd}' (use 'lumitrace exec #{cmd} ...' to be explicit)"
+    args.unshift("exec")
+  end
+end
+
 if opts[:git_diff_mode] == "exec" && args.first != "exec"
   args.unshift("exec")
   opts[:git_diff_mode] = "working"

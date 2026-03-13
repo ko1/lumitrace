@@ -60,7 +60,9 @@ module GenerateResultedHtml
     meta = {
       mode: mode_info[:mode],
       mode_text: mode_info[:text],
-      max_samples: mode_info[:max_samples]
+      max_samples: mode_info[:max_samples],
+      ruby_version: RUBY_DESCRIPTION,
+      lumitrace_version: defined?(Lumitrace::VERSION) ? Lumitrace::VERSION : nil
     }
     meta[:command] = command_text if command_text && !command_text.to_s.empty?
     {
@@ -202,6 +204,25 @@ module GenerateResultedHtml
       .marker:focus-within .tooltip,
       .marker .tooltip:hover { display: block; }
       .noscript { color: #666; }
+      .tree-overview-btn { font-weight: bold; margin-bottom: 8px; }
+      .overview-section { background: #fffdf7; border: 1px solid #e5dfd0; border-radius: 8px; padding: 20px; }
+      .overview-heading { font-size: 14px; color: #333; margin: 20px 0 8px; border-bottom: 1px solid #e5dfd0; padding-bottom: 4px; }
+      .overview-heading:first-child { margin-top: 0; }
+      .overview-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
+      .overview-dl dt { color: #666; font-weight: bold; }
+      .overview-dl dd { margin: 0; word-break: break-all; }
+      .overview-table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 4px 0; }
+      .overview-table th, .overview-table td { padding: 4px 10px; text-align: left; border-bottom: 1px solid #e5dfd0; }
+      .overview-table th { color: #555; font-weight: bold; font-size: 12px; }
+      .overview-table th.sortable { cursor: pointer; user-select: none; }
+      .overview-table th.sortable:hover { color: #2f6f8e; }
+      .overview-table th[data-sort="asc"]::after { content: " \\25B2"; font-size: 10px; }
+      .overview-table th[data-sort="desc"]::after { content: " \\25BC"; font-size: 10px; }
+      .overview-table td { color: #1f1f1f; }
+      .overview-summary-table { max-width: 400px; }
+      .overview-multitype-table td { font-size: 12px; }
+      .overview-file-link { color: #2f6f8e; text-decoration: none; }
+      .overview-file-link:hover { text-decoration: underline; }
       @media (max-width: 900px) {
         body { padding: 16px; }
         .report-layout { grid-template-columns: 1fr; }
