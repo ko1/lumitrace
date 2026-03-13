@@ -2,6 +2,8 @@
 
 Lumitrace instruments Ruby source code at load time, records expression results, and renders an HTML view that overlays recorded values on your code. It is designed for quick, local “what happened here?” inspection during test runs or scripts.
 
+[HTML view example](./docs/lumitrace_html_example.png)
+
 ## Useful links
 
 - [runv/](https://ko1.github.io/lumitrace/runv/): Lumitrace demonstration Ruby playground with inlined tracing
