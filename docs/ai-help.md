@@ -20,7 +20,7 @@ AI agents: run `lumitrace help --format json` to get structured help.
 - Then switch to `--collect-mode last` for final value inspection on suspicious lines.
 - Use `--collect-mode history --max-samples N` only when value transitions matter.
 - Combine `--range` or `--git-diff` to keep outputs small and focused.
-- -j, -h, -t are flags with optional arguments joined by = (e.g. --json=PATH or -jPATH). Do NOT put a space before the path: `-j foo.json` treats foo.json as the script to run, not the output path.
+- -j, -h, -t are flags that enable output with default paths. Use --json PATH, --html PATH, --text PATH to specify output paths.
 
 ## Commands
 - `lumitrace [options] script.rb [ruby_opt]`
@@ -40,9 +40,9 @@ AI agents: run `lumitrace help --format json` to get structured help.
 ## Key Options
 - `--collect-mode` (default="last"; values=last,types,history)
 - `--max-samples` (default=3; Used by history mode.)
-- `-j, --json[=PATH]` (Emit JSON output. Flag only: -j uses default path. To specify path: --json=PATH or -jPATH (no space).)
-- `-h, --html[=PATH]` (Emit HTML output. Flag only: -h uses default path. To specify path: --html=PATH or -hPATH (no space).)
-- `-t, --text[=PATH]` (Emit text output. Flag only: -t uses default path. To specify path: --text=PATH or -tPATH (no space).)
+- `-j` / `--json PATH` (Emit JSON output. -j uses default path; --json PATH writes to PATH.)
+- `-h` / `--html PATH` (Emit HTML output. -h uses default path; --html PATH writes to PATH.)
+- `-t` / `--text PATH` (Emit text output. -t uses default path; --text PATH writes to PATH.)
 - `-g, --git-diff[=MODE]` (Restrict instrumentation to diff hunks.)
 - `--range SPEC` (repeatable=true; Restrict instrumentation to file ranges.)
 - `--git-diff-context N` (Expand diff hunks by +/-N lines.)
@@ -55,7 +55,7 @@ AI agents: run `lumitrace help --format json` to get structured help.
 - `lumitrace --collect-mode history --max-samples 5 -j app.rb`
 - `lumitrace --collect-mode types -h -j app.rb`
 - `lumitrace --collect-mode last -j exec bin/rails test`
-- `lumitrace --json=output.json exec bin/rails test`
-- `lumitrace -j --html=report.html app.rb`
+- `lumitrace --json output.json exec bin/rails test`
+- `lumitrace -j --html report.html app.rb`
 - `lumitrace help --format json`
 - `lumitrace schema --format json`

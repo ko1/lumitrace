@@ -128,7 +128,7 @@ class LumiTraceTest < Minitest::Test
   end
 
   def test_parse_cli_options_basic
-    argv = ["-t", "--html=/tmp/out.html", "-j", "--max-samples", "7", "--collect-mode", "history", "--root", "/tmp/root",
+    argv = ["-t", "--html", "/tmp/out.html", "-j", "--max-samples", "7", "--collect-mode", "history", "--root", "/tmp/root",
             "--range", "a.rb:1-3,5-6", "--verbose", "file.rb"]
     opts, args, _parser = Lumitrace.parse_cli_options(argv, allow_help: true)
 
@@ -144,7 +144,7 @@ class LumiTraceTest < Minitest::Test
   end
 
   def test_parse_enable_args_cli_string
-    opts = Lumitrace.parse_enable_args("--text=/tmp/out.txt -h --json=/tmp/out.json --max-samples 5 --collect-mode types --root /tmp/root")
+    opts = Lumitrace.parse_enable_args("--text /tmp/out.txt -h --json /tmp/out.json --max-samples 5 --collect-mode types --root /tmp/root")
 
     assert_equal "/tmp/out.txt", opts[:text]
     assert_equal true, opts[:html]

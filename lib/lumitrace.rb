@@ -290,9 +290,12 @@ module Lumitrace
       o.banner = banner if banner
       o.separator ""
       o.separator "Options:"
-      o.on("-t", "--text[=PATH]", "Text output (stdout or PATH)") { |v| opts[:text] = v.nil? || v.empty? ? true : v }
-      o.on("-h", "--html[=PATH]", "HTML output (default file or PATH)") { |v| opts[:html] = v.nil? || v.empty? ? true : v }
-      o.on("-j", "--json[=PATH]", "JSON output (default file or PATH)") { |v| opts[:json] = v.nil? || v.empty? ? true : v }
+      o.on("-t", "Enable text output (stdout or default path)") { opts[:text] = true }
+      o.on("--text PATH", "Text output to PATH") { |v| opts[:text] = v }
+      o.on("-h", "Enable HTML output (default path)") { opts[:html] = true }
+      o.on("--html PATH", "HTML output to PATH") { |v| opts[:html] = v }
+      o.on("-j", "Enable JSON output (default path)") { opts[:json] = true }
+      o.on("--json PATH", "JSON output to PATH") { |v| opts[:json] = v }
       o.on("-g", "--git-diff[=MODE]", "Diff ranges (working, staged, base:REV, range:SPEC)") { |v| opts[:git_diff_mode] = v.nil? || v.empty? ? "working" : v }
       o.on("--max-samples N", Integer, "Max samples per expression") { |v| opts[:max_samples] = v }
       o.on("--collect-mode MODE", "Collect mode: last, types, history") { |v| opts[:collect_mode] = v }
