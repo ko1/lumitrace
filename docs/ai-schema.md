@@ -2,7 +2,7 @@
 
 # Lumitrace JSON Schema
 
-- Version: 0.6.2
+- Version: 0.7.0
 - Schema version: 1
 - Top level: object
   - `version` (integer) - Schema version number.
