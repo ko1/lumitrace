@@ -23,7 +23,9 @@ module Lumitrace
         "First run with `--collect-mode types` to get a compact shape of runtime behavior.",
         "Then switch to `--collect-mode last` for final value inspection on suspicious lines.",
         "Use `--collect-mode history --max-samples N` only when value transitions matter.",
-        "Combine `--range` or `--git-diff` to keep outputs small and focused."
+        "Combine `--range` or `--git-diff` to keep outputs small and focused.",
+        "-j, -h, -t are flags with optional arguments joined by = (e.g. --json=PATH or -jPATH). " \
+          "Do NOT put a space before the path: `-j foo.json` treats foo.json as the script to run, not the output path."
       ],
       commands: [
         {
@@ -56,9 +58,9 @@ module Lumitrace
       key_options: [
         { name: "--collect-mode", values: COLLECT_MODES, default: "last" },
         { name: "--max-samples", type: "Integer", default: 3, note: "Used by history mode." },
-        { name: "-j, --json[=PATH]", type: "bool|string", note: "Emit JSON output." },
-        { name: "-h, --html[=PATH]", type: "bool|string", note: "Emit HTML output." },
-        { name: "-t, --text[=PATH]", type: "bool|string", note: "Emit text output." },
+        { name: "-j, --json[=PATH]", type: "bool|string", note: "Emit JSON output. Flag only: -j uses default path. To specify path: --json=PATH or -jPATH (no space)." },
+        { name: "-h, --html[=PATH]", type: "bool|string", note: "Emit HTML output. Flag only: -h uses default path. To specify path: --html=PATH or -hPATH (no space)." },
+        { name: "-t, --text[=PATH]", type: "bool|string", note: "Emit text output. Flag only: -t uses default path. To specify path: --text=PATH or -tPATH (no space)." },
         { name: "-g, --git-diff[=MODE]", type: "string", note: "Restrict instrumentation to diff hunks." },
         { name: "--range SPEC", type: "string", repeatable: true, note: "Restrict instrumentation to file ranges." },
         { name: "--git-diff-context N", type: "Integer", note: "Expand diff hunks by +/-N lines." },
@@ -76,6 +78,8 @@ module Lumitrace
         "lumitrace --collect-mode history --max-samples 5 -j app.rb",
         "lumitrace --collect-mode types -h -j app.rb",
         "lumitrace --collect-mode last -j exec bin/rails test",
+        "lumitrace --json=output.json exec bin/rails test",
+        "lumitrace -j --html=report.html app.rb",
         "lumitrace help --format json",
         "lumitrace schema --format json"
       ]
