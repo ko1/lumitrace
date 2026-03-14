@@ -15,6 +15,22 @@ Lumitrace instruments Ruby source code at load time, records expression results,
 - [Supported Syntax](https://ko1.github.io/lumitrace/docs/supported_syntax.html)
 - [GitHub repository](https://github.com/ko1/lumitrace)
 
+## Blog Articles
+
+### Introduction
+
+- [Lumitrace: See What Your Ruby Code Is Actually Doing, Instantly](https://dev.to/ko1/lumitrace-see-what-your-ruby-code-is-actually-doing-instantly-251n)
+  ([日本語: Lumitrace: Ruby の「今なにが起きてる？」を一発で見える化するツール](https://zenn.dev/ko1/articles/0b747b085a925d))
+
+### Practical Examples
+
+- [Using Lumitrace to Eliminate Redundant Type Conversions in Ruby](https://dev.to/ko1/using-lumitrace-to-eliminate-redundant-type-conversions-in-ruby-1kfg)
+  ([日本語: lumitrace で「念のため .to_s」を一掃した話](https://zenn.dev/ko1/articles/06bca0305a7c34))
+- [Fixing Hotspots and Coverage Gaps in One Shot with Lumitrace](https://dev.to/ko1/fixing-hotspots-and-coverage-gaps-in-one-shot-with-lumitrace-58ll)
+  ([日本語: lumitrace でホットスポットとカバレッジの穴を同時に潰した話](https://zenn.dev/ko1/articles/2751698449aaff))
+- [Unearthing DRY Violations from Hotspot Data with Lumitrace](https://dev.to/ko1/unearthing-dry-violations-from-hotspot-data-with-lumitrace-4p4l)
+  ([日本語: lumitrace でホットスポットから DRY 違反を掘り出した話](https://zenn.dev/ko1/articles/8d85f1922c25f5))
+
 
 ## How It Works
 
