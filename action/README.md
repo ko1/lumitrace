@@ -21,8 +21,9 @@ name: test
 on: pull_request
 
 permissions:
-  checks: write     # required to post the check run
+  checks: write     # post the check run
   contents: read
+  id-token: write   # upload the report to lumitrace.atdot.net for a linked HTML report
 
 jobs:
   test:
@@ -41,7 +42,9 @@ jobs:
         if: always()                        # report even when tests fail
 ```
 
-That's the whole integration: two steps plus a `permissions:` block.
+That's the whole integration: two steps plus a `permissions:` block. Drop
+`id-token: write` and you still get the PR check — just without the linked
+hosted report (nothing is uploaded anywhere).
 
 ## What you get
 
@@ -68,8 +71,9 @@ That's the whole integration: two steps plus a `permissions:` block.
 |---|---|---|
 | `output` | `lumitrace.json` | JSON path (must match `setup`'s `output`). |
 | `name` | `lumitrace` | Check run name shown on the PR. |
-| `endpoint` | _(empty)_ | Backend base URL to upload the JSON to. Empty = skip upload (no server needed). |
-| `audience` | `lumitrace-ci` | OIDC audience for the upload (only used when `endpoint` is set). |
+| `html` | `lumitrace.html` | HTML path (must match `setup`'s `html`); uploaded with the JSON. |
+| `endpoint` | `https://lumitrace.atdot.net` | Backend the report is uploaded to. Upload only happens when the workflow grants `id-token: write`; set to `""` to disable, or point at your own server. |
+| `audience` | `lumitrace-ci` | OIDC audience for the upload. |
 
 ## Notes
 
@@ -80,9 +84,10 @@ That's the whole integration: two steps plus a `permissions:` block.
   checkout works. (If you set `persist-credentials: false`, add `fetch-depth: 0`.)
 - **Fail-safe.** If lumitrace can't load on the runner's Ruby, `setup` warns and
   skips injection — your test step runs exactly as it would without this action.
-- **No backend or App needed.** `report` posts the check with the workflow
-  `GITHUB_TOKEN`. Set `endpoint` (and `permissions: id-token: write`) only when you
-  add a backend for the full HTML report.
+- **Hosted report is opt-in via `id-token: write`.** With that permission, `report`
+  uploads to `lumitrace.atdot.net` (OIDC-authenticated, no shared secret) and links
+  the check to the HTML report. Without it, nothing is uploaded — you just get the
+  check, posted with the workflow `GITHUB_TOKEN`. Any upload failure is non-fatal.
 - **Fork PRs.** `GITHUB_TOKEN` is read-only on PRs from forks, so the check can't
   be posted there until a GitHub App is added.
 
