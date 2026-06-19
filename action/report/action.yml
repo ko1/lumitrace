@@ -15,8 +15,11 @@ inputs:
     description: "Check run name shown on the PR."
     default: "lumitrace"
   endpoint:
-    description: "Backend base URL to upload the report to (e.g. https://lumitrace.atdot.net). Empty = skip upload (no server needed)."
-    default: ""
+    description: >-
+      Backend the report is uploaded to (for the linked HTML report). Defaults to
+      the hosted lumitrace.atdot.net. Upload only happens when the workflow grants
+      `id-token: write`; set to "" to disable, or point at your own server.
+    default: "https://lumitrace.atdot.net"
   audience:
     description: "OIDC audience for the upload (only used when endpoint is set)."
     default: "lumitrace-ci"
@@ -39,25 +42,27 @@ runs:
         HEAD_SHA="${{ github.event.pull_request.head.sha }}"
         [ -z "$HEAD_SHA" ] && HEAD_SHA="${{ github.sha }}"
 
-        # Optional upload to the backend, authenticated with the job's OIDC token
-        # (no shared secret). The server derives repo/sha/visibility from the OIDC
-        # claims; we send the trace JSON and the self-contained HTML, and use the
-        # returned view_url (a path) as the check's details link.
+        # Upload to the backend (default lumitrace.atdot.net) ONLY when an OIDC
+        # token is available — i.e. the workflow granted `id-token: write`. No
+        # token, no endpoint, or any failure just means no hosted-report link:
+        # this never fails the job (lumitrace never blocks CI).
         DETAILS=""
         ENDPOINT="${{ inputs.endpoint }}"
-        if [ -n "$ENDPOINT" ]; then
-          ENDPOINT="${ENDPOINT%/}"
+        ENDPOINT="${ENDPOINT%/}"
+        if [ -n "$ENDPOINT" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
           OIDC="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${{ inputs.audience }}" \
-                  | ruby -rjson -e 'puts JSON.parse(STDIN.read)["value"]')"
-          HTML="${{ inputs.html }}"
-          html_field=()
-          [ -s "$HTML" ] && html_field=(-F "html=@${HTML}")
-          VIEW="$(curl -sS -X POST "${ENDPOINT}/api/v1/upload" \
-                  -H "Authorization: Bearer $OIDC" \
-                  -F "json=@${OUT}" "${html_field[@]}" \
-                  | ruby -rjson -e 'begin; puts JSON.parse(STDIN.read)["view_url"]; rescue; end')"
-          [ -n "$VIEW" ] && DETAILS="${ENDPOINT}${VIEW}"
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${{ inputs.audience }}" 2>/dev/null \
+                  | ruby -rjson -e 'begin; print JSON.parse(STDIN.read)["value"]; rescue; end' || true)"
+          if [ -n "$OIDC" ]; then
+            HTML="${{ inputs.html }}"
+            html_field=()
+            [ -s "$HTML" ] && html_field=(-F "html=@${HTML}")
+            VIEW="$(curl -sS -X POST "${ENDPOINT}/api/v1/upload" \
+                    -H "Authorization: Bearer $OIDC" \
+                    -F "json=@${OUT}" "${html_field[@]}" 2>/dev/null \
+                    | ruby -rjson -e 'begin; print JSON.parse(STDIN.read)["view_url"]; rescue; end' || true)"
+            [ -n "$VIEW" ] && DETAILS="${ENDPOINT}${VIEW}"
+          fi
         fi
 
         ruby "$GITHUB_ACTION_PATH/../build_check.rb" \
