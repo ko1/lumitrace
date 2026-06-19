@@ -50,15 +50,15 @@ class LumiTraceTest < Minitest::Test
     assert defined?(Lumitrace::GenerateResultedHtml)
   end
 
-  # Regression: WRAP_NODE_CLASSES must contain only real classes. Prism nodes
+  # Regression: wrap_node_classes must contain only real classes. Prism nodes
   # that exist on newer Rubies only (e.g. Prism::ItLocalVariableReadNode, 3.4+)
   # are guarded with `if defined?` + compact, so a missing constant must not
   # leak a nil (which would also break requiring lumitrace on the 3.2/3.3 floor).
   def test_wrap_node_classes_are_all_classes
-    classes = Lumitrace::RecordInstrument::WRAP_NODE_CLASSES
+    classes = Lumitrace::RecordInstrument.wrap_node_classes
     assert classes.frozen?
     refute_empty classes
-    assert(classes.all? { |c| c.is_a?(Class) }, "WRAP_NODE_CLASSES must not contain nil")
+    assert(classes.all? { |c| c.is_a?(Class) }, "wrap_node_classes must not contain nil")
   end
 
   # Regression: tracing auto-enabled via env (RUBYOPT=-rlumitrace in CI) must

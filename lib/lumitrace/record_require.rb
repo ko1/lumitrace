@@ -1,5 +1,5 @@
-require "json"
-require "prism"
+# `require "prism"` is deferred to RecordInstrument's parse methods (loaded only
+# when instrumenting an in-range file, after Bundler). See record_instrument.rb.
 require_relative "./record_instrument"
 
 module Lumitrace

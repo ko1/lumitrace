@@ -1,4 +1,4 @@
-require "json"
+# `require "json"` is deferred to the methods that use it; see record_instrument.rb.
 require_relative "record_instrument"
 
 module Lumitrace
@@ -18,6 +18,7 @@ module GenerateResultedHtml
   end
 
   def self.render(source_path, events_path, ranges: nil, collect_mode: nil, max_samples: nil)
+    require "json"
     unless File.exist?(events_path)
       abort "missing #{events_path}"
     end
@@ -116,6 +117,7 @@ module GenerateResultedHtml
   end
 
   def self.payload_json_for_script(payload)
+    require "json"
     JSON.generate(payload)
       .gsub("</", "<\\/")
       .gsub("\u2028", "\\u2028")
@@ -676,6 +678,7 @@ module GenerateResultedHtml
   end
 
   def self.render_all(events_path, root: Dir.pwd, ranges_by_file: nil, collect_mode: nil, max_samples: nil, logger: nil, command_text: nil)
+    require "json"
     raw = JSON.parse(File.read(events_path))
     raw_events = raw.is_a?(Hash) && raw.key?("events") ? raw["events"] : raw
     render_all_from_events(

@@ -1,5 +1,10 @@
-require "json"
-require "prism"
+# NOTE: `require "json"` and `require "prism"` are deliberately deferred to the
+# methods that use them. lumitrace is loaded via `RUBYOPT=-rlumitrace`, i.e.
+# before Bundler sets up the load path; requiring a default gem (json, prism) at
+# that point activates the default version and conflicts with apps whose bundle
+# pins a different one. The translate hook only parses (needs prism) for files in
+# the diff range — which load after Bundler — and json is used only at output
+# time, so both are required lazily (see the node-class tables and json sites).
 
 module Lumitrace
   def self.R(id, value)
@@ -9,50 +14,41 @@ module Lumitrace
 module RecordInstrument
   IDENTIFIER_METHOD_NAME_RE = /\A[a-z_]\w*[!?=]?\z/.freeze
 
-  SKIP_NODE_CLASSES = [
-    Prism::DefNode,
-    Prism::ClassNode,
-    Prism::ModuleNode,
-    Prism::IfNode,
-    Prism::UnlessNode,
-    Prism::WhileNode,
-    Prism::UntilNode,
-    Prism::ForNode,
-    Prism::CaseNode,
-    Prism::BeginNode,
-    Prism::RescueNode,
-    Prism::EnsureNode,
-    Prism::AliasMethodNode,
-    Prism::UndefNode
-  ].freeze
+  # Node-class tables are built lazily (memoized) so they don't reference Prism
+  # at load time — only on first instrumentation, after `require "prism"`.
+  def self.skip_node_classes
+    require "prism"
+    @skip_node_classes ||= [
+      Prism::DefNode, Prism::ClassNode, Prism::ModuleNode, Prism::IfNode,
+      Prism::UnlessNode, Prism::WhileNode, Prism::UntilNode, Prism::ForNode,
+      Prism::CaseNode, Prism::BeginNode, Prism::RescueNode, Prism::EnsureNode,
+      Prism::AliasMethodNode, Prism::UndefNode
+    ].freeze
+  end
 
-  LITERAL_NODE_CLASSES = [
-    Prism::IntegerNode,
-    Prism::FloatNode,
-    Prism::RationalNode,
-    Prism::ImaginaryNode,
-    Prism::StringNode,
-    Prism::SymbolNode,
-    Prism::TrueNode,
-    Prism::FalseNode,
-    Prism::NilNode
-  ].freeze
+  def self.literal_node_classes
+    require "prism"
+    @literal_node_classes ||= [
+      Prism::IntegerNode, Prism::FloatNode, Prism::RationalNode,
+      Prism::ImaginaryNode, Prism::StringNode, Prism::SymbolNode,
+      Prism::TrueNode, Prism::FalseNode, Prism::NilNode
+    ].freeze
+  end
 
-  WRAP_NODE_CLASSES = [
-    Prism::CallNode,
-    Prism::YieldNode,
-    Prism::LocalVariableReadNode,
-    Prism::ConstantReadNode,
-    Prism::InstanceVariableReadNode,
-    Prism::ClassVariableReadNode,
-    Prism::GlobalVariableReadNode,
-    # `it` implicit block parameter: the Prism node exists only on Ruby 3.4+.
-    # Guard it so requiring lumitrace doesn't raise on the declared 3.2/3.3 floor
-    # (those Rubies have no `it` to trace anyway).
-    (Prism::ItLocalVariableReadNode if defined?(Prism::ItLocalVariableReadNode))
-  ].compact.freeze
+  def self.wrap_node_classes
+    require "prism"
+    @wrap_node_classes ||= [
+      Prism::CallNode, Prism::YieldNode, Prism::LocalVariableReadNode,
+      Prism::ConstantReadNode, Prism::InstanceVariableReadNode,
+      Prism::ClassVariableReadNode, Prism::GlobalVariableReadNode,
+      # `it` implicit block parameter: the Prism node exists only on Ruby 3.4+.
+      # Guard it so older Rubies (no `it` to trace) don't raise.
+      (Prism::ItLocalVariableReadNode if defined?(Prism::ItLocalVariableReadNode))
+    ].compact.freeze
+  end
 
   def self.instrument_source(src, ranges, file_label: nil, record_method: "::Lumitrace::R")
+    require "prism"
     file_label ||= "(unknown)"
     ranges = normalize_ranges(ranges)
 
@@ -74,6 +70,7 @@ module RecordInstrument
   end
 
   def self.collect_locations_from_source(src, ranges)
+    require "prism"
     ranges = normalize_ranges(ranges || [])
     parse = Prism.parse(src)
     if parse.errors.any?
@@ -176,7 +173,7 @@ module RecordInstrument
   end
 
   def self.literal_value_node?(node)
-    LITERAL_NODE_CLASSES.include?(node.class)
+    literal_node_classes.include?(node.class)
   end
 
   def self.wrap_expr?(node, parent = nil)
@@ -200,7 +197,7 @@ module RecordInstrument
        (parent.is_a?(Prism::ClassNode) || parent.is_a?(Prism::ModuleNode))
       return false
     end
-    WRAP_NODE_CLASSES.include?(node.class)
+    wrap_node_classes.include?(node.class)
   end
 
   def self.command_style_call_node?(node)
@@ -491,12 +488,14 @@ module RecordInstrument
   end
 
   def self.dump_json(path = nil)
+    require "json"
     path ||= File.expand_path("lumitrace_recorded.json", Dir.pwd)
     File.write(path, JSON.dump(events_from_ids), perm: 0o600)
     path
   end
 
   def self.dump_events_json(events, path = nil)
+    require "json"
     path ||= File.expand_path("lumitrace_recorded.json", Dir.pwd)
     payload = {
       version: 1,
@@ -535,6 +534,7 @@ module RecordInstrument
   end
 
   def self.load_events_json(path)
+    require "json"
     JSON.parse(File.read(path))
   end
 
@@ -766,6 +766,7 @@ module RecordInstrument
   end
 
   def self.definition_lines_from_source(src, ranges)
+    require "prism"
     ranges = normalize_ranges(ranges || [])
     parse = Prism.parse(src)
     if parse.errors.any?
@@ -938,6 +939,7 @@ end
 end
 
 if $PROGRAM_NAME == __FILE__
+  require "json"
   path = ARGV[0] or abort "usage: ruby record_instrument.rb FILE RANGES_JSON [record_method] [out_path]"
   ranges = JSON.parse(ARGV[1] || "[]")
   record_method = ARGV[2] || "Lumitrace::R"

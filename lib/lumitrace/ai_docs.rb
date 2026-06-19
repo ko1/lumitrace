@@ -13,6 +13,7 @@ module Lumitrace
   end
 
   def self.render_help(format: "text")
+    require "json"
     normalized = normalize_output_format(format)
     data = help_manifest
     return JSON.pretty_generate(data) + "\n" if normalized == "json"
@@ -63,6 +64,7 @@ module Lumitrace
   end
 
   def self.render_schema(format: "text")
+    require "json"
     normalized = normalize_output_format(format)
     data = schema_manifest
     return JSON.pretty_generate(data) + "\n" if normalized == "json"
