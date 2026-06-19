@@ -42,12 +42,15 @@ module RecordInstrument
     Prism::CallNode,
     Prism::YieldNode,
     Prism::LocalVariableReadNode,
-    Prism::ItLocalVariableReadNode,
     Prism::ConstantReadNode,
     Prism::InstanceVariableReadNode,
     Prism::ClassVariableReadNode,
-    Prism::GlobalVariableReadNode
-  ].freeze
+    Prism::GlobalVariableReadNode,
+    # `it` implicit block parameter: the Prism node exists only on Ruby 3.4+.
+    # Guard it so requiring lumitrace doesn't raise on the declared 3.2/3.3 floor
+    # (those Rubies have no `it` to trace anyway).
+    (Prism::ItLocalVariableReadNode if defined?(Prism::ItLocalVariableReadNode))
+  ].compact.freeze
 
   def self.instrument_source(src, ranges, file_label: nil, record_method: "::Lumitrace::R")
     file_label ||= "(unknown)"

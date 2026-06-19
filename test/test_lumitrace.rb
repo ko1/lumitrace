@@ -50,6 +50,37 @@ class LumiTraceTest < Minitest::Test
     assert defined?(Lumitrace::GenerateResultedHtml)
   end
 
+  # Regression: WRAP_NODE_CLASSES must contain only real classes. Prism nodes
+  # that exist on newer Rubies only (e.g. Prism::ItLocalVariableReadNode, 3.4+)
+  # are guarded with `if defined?` + compact, so a missing constant must not
+  # leak a nil (which would also break requiring lumitrace on the 3.2/3.3 floor).
+  def test_wrap_node_classes_are_all_classes
+    classes = Lumitrace::RecordInstrument::WRAP_NODE_CLASSES
+    assert classes.frozen?
+    refute_empty classes
+    assert(classes.all? { |c| c.is_a?(Class) }, "WRAP_NODE_CLASSES must not contain nil")
+  end
+
+  # Regression: tracing auto-enabled via env (RUBYOPT=-rlumitrace in CI) must
+  # never take down the host process if enable! fails. An invalid LUMITRACE_RANGE
+  # makes enable! raise ArgumentError; the host program must still run and exit 0.
+  def test_env_auto_enable_failure_does_not_crash_host
+    lib = File.expand_path("../lib", __dir__)
+    env = {
+      "RUBYLIB" => lib,
+      "RUBYOPT" => "-rlumitrace",
+      "LUMITRACE_ENABLE" => "1",
+      "LUMITRACE_RANGE" => ":", # invalid spec -> enable! raises ArgumentError
+      "LUMITRACE_TEXT" => "0",
+      "LUMITRACE_HTML" => "0",
+      "LUMITRACE_JSON" => "0"
+    }
+    out = IO.popen(env, [RbConfig.ruby, "-e", 'print "HOST_OK"'], err: %i[child out], &:read)
+    assert_equal 0, $?.exitstatus, "auto-enable failure must not crash the host: #{out}"
+    assert_includes out, "HOST_OK"
+    assert_includes out, "tracing disabled"
+  end
+
   def test_instrument_wraps_calls_and_reads
     src = <<~RUBY
       def compute(x)
