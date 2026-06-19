@@ -1,0 +1,62 @@
+name: Lumitrace Setup
+description: >-
+  Enable lumitrace for the steps that follow by injecting env vars into
+  $GITHUB_ENV. The existing test step gets traced (diff range only) without
+  changing its command. Uses the lumitrace gem source shipped with this action
+  checkout, so no `gem install` is needed.
+inputs:
+  collect-mode:
+    description: "last | types | history (default types: keeps raw values out of the public PR view)"
+    default: "types"
+  output:
+    description: "Path for the JSON trace output (must match the report action's `output`)."
+    default: "lumitrace.json"
+  diff:
+    description: >-
+      LUMITRACE_GIT_DIFF value (working | staged | base:REV | range:SPEC).
+      Empty = derive from the event (PR base sha, else push `before`, else `working`).
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        # action/setup -> ../.. == the gem repo root that GitHub checked out for this action.
+        LUMI_LIB="$(cd "$GITHUB_ACTION_PATH/../.." && pwd)/lib"
+        if [ ! -f "$LUMI_LIB/lumitrace.rb" ]; then
+          echo "::error::lumitrace lib not found at $LUMI_LIB" >&2
+          exit 1
+        fi
+
+        # Fail-safe: tracing must never break the user's test step. If lumitrace
+        # can't even load on this Ruby, warn and skip injecting RUBYOPT so the
+        # following steps run exactly as they would without this action.
+        if ! err="$(ruby -I"$LUMI_LIB" -e 'require "lumitrace"' 2>&1)"; then
+          echo "::warning title=lumitrace::tracing disabled — lumitrace failed to load: ${err##*$'\n'}"
+          exit 0
+        fi
+
+        DIFF="${{ inputs.diff }}"
+        if [ -z "$DIFF" ]; then
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [ -z "$BASE" ] && BASE="${{ github.event.before }}"
+          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
+            DIFF="base:${BASE}"
+          else
+            DIFF="working"
+          fi
+        fi
+
+        {
+          echo "RUBYLIB=${LUMI_LIB}${RUBYLIB:+:$RUBYLIB}"
+          echo "RUBYOPT=-rlumitrace ${RUBYOPT:-}"
+          echo "LUMITRACE_ENABLE=1"
+          echo "LUMITRACE_JSON=${{ inputs.output }}"
+          echo "LUMITRACE_ROOT=${{ github.workspace }}"
+          echo "LUMITRACE_COLLECT_MODE=${{ inputs.collect-mode }}"
+          echo "LUMITRACE_GIT_DIFF=${DIFF}"
+        } >> "$GITHUB_ENV"
+
+        echo "lumitrace enabled: mode=${{ inputs.collect-mode }} diff=${DIFF} out=${{ inputs.output }} lib=${LUMI_LIB}"

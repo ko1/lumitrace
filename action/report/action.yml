@@ -1,0 +1,59 @@
+name: Lumitrace Report
+description: >-
+  Turn the lumitrace JSON output into a GitHub Check Run (summary + diff-line
+  annotations). Optionally uploads the JSON to a backend for a full HTML report.
+  Works with no backend: leave `endpoint` empty and the check is still posted
+  via the workflow GITHUB_TOKEN (needs `permissions: checks: write`).
+inputs:
+  output:
+    description: "JSON path (must match the setup action's `output`)."
+    default: "lumitrace.json"
+  name:
+    description: "Check run name shown on the PR."
+    default: "lumitrace"
+  endpoint:
+    description: "Backend base URL to upload the JSON to. Empty = skip upload (no server needed)."
+    default: ""
+  audience:
+    description: "OIDC audience for the upload (only used when endpoint is set)."
+    default: "lumitrace-ci"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        LUMITRACE_CHECK_NAME: ${{ inputs.name }}
+      run: |
+        set -euo pipefail
+
+        OUT="${{ inputs.output }}"
+        if [ ! -s "$OUT" ]; then
+          echo "lumitrace: no trace output at $OUT (diff had no traced lines?) — skipping check."
+          exit 0
+        fi
+
+        HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+        [ -z "$HEAD_SHA" ] && HEAD_SHA="${{ github.sha }}"
+
+        # Optional upload to the backend, authenticated with the job's OIDC token (no shared secret).
+        DETAILS=""
+        if [ -n "${{ inputs.endpoint }}" ]; then
+          OIDC="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${{ inputs.audience }}" \
+                  | ruby -rjson -e 'puts JSON.parse(STDIN.read)["value"]')"
+          DETAILS="$(curl -sS -X POST "${{ inputs.endpoint }}/api/uploads" \
+                  -H "Authorization: Bearer $OIDC" \
+                  -F "repo=${{ github.repository }}" \
+                  -F "sha=${HEAD_SHA}" \
+                  -F "pr=${{ github.event.pull_request.number }}" \
+                  -F "json=@${OUT}" \
+                  | ruby -rjson -e 'begin; puts JSON.parse(STDIN.read)["report_url"]; rescue; end')"
+        fi
+
+        ruby "$GITHUB_ACTION_PATH/../build_check.rb" \
+          "$OUT" "$HEAD_SHA" "${{ github.workspace }}" "$DETAILS" > "$RUNNER_TEMP/lumitrace-check.json"
+
+        gh api "repos/${{ github.repository }}/check-runs" \
+          --input "$RUNNER_TEMP/lumitrace-check.json" --silent
+        echo "lumitrace: posted check run '${{ inputs.name }}' for ${HEAD_SHA}"
