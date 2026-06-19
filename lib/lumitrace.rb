@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "json"
 require "shellwords"
 require "tmpdir"
 require_relative "lumitrace/version"
