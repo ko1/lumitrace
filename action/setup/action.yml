@@ -3,7 +3,8 @@ description: >-
   Enable lumitrace for the steps that follow by injecting env vars into
   $GITHUB_ENV. The existing test step gets traced (diff range only) without
   changing its command. Uses the lumitrace gem source shipped with this action
-  checkout, so no `gem install` is needed.
+  checkout, so no `gem install` is needed. Fetches the PR base commit itself
+  when missing, so the default shallow checkout works (no fetch-depth: 0).
 inputs:
   collect-mode:
     description: "last | types | history (default types: keeps raw values out of the public PR view)"
@@ -48,6 +49,21 @@ runs:
             DIFF="working"
           fi
         fi
+
+        # `git diff base:<sha>` is a tree-to-tree compare — it only needs that one
+        # base commit, not full history. So fetch just it (depth 1) if it's missing,
+        # letting users keep the default shallow checkout (no fetch-depth: 0 needed).
+        case "$DIFF" in
+          base:*)
+            base_rev="${DIFF#base:}"
+            if git -C "$GITHUB_WORKSPACE" rev-parse --git-dir >/dev/null 2>&1 &&
+               ! git -C "$GITHUB_WORKSPACE" cat-file -e "${base_rev}^{commit}" 2>/dev/null; then
+              if ! git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$base_rev" 2>/dev/null; then
+                echo "::warning title=lumitrace::could not fetch base ${base_rev} — diff range may be empty. Add 'fetch-depth: 0' to actions/checkout (and keep persist-credentials)."
+              fi
+            fi
+            ;;
+        esac
 
         {
           echo "RUBYLIB=${LUMI_LIB}${RUBYLIB:+:$RUBYLIB}"
