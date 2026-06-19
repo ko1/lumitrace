@@ -12,6 +12,9 @@ inputs:
   output:
     description: "Path for the JSON trace output (must match the report action's `output`)."
     default: "lumitrace.json"
+  html:
+    description: "Path for the self-contained HTML report (uploaded by the report action when a backend is set)."
+    default: "lumitrace.html"
   diff:
     description: >-
       LUMITRACE_GIT_DIFF value (working | staged | base:REV | range:SPEC).
@@ -70,6 +73,7 @@ runs:
           echo "RUBYOPT=-rlumitrace ${RUBYOPT:-}"
           echo "LUMITRACE_ENABLE=1"
           echo "LUMITRACE_JSON=${{ inputs.output }}"
+          echo "LUMITRACE_HTML=${{ inputs.html }}"
           echo "LUMITRACE_ROOT=${{ github.workspace }}"
           echo "LUMITRACE_COLLECT_MODE=${{ inputs.collect-mode }}"
           echo "LUMITRACE_GIT_DIFF=${DIFF}"
