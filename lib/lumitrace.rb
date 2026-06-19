@@ -568,18 +568,27 @@ module Lumitrace
 end
 
 enable_env = Lumitrace.parse_env_flag(ENV["LUMITRACE_ENABLE"])
-if enable_env == true
-  Lumitrace.enable!
-elsif enable_env.is_a?(String)
-  opts = Lumitrace.parse_enable_args(enable_env)
-  Lumitrace.enable!(
-    max_samples: opts[:max_samples],
-    ranges_by_file: opts[:ranges_by_file],
-    root: opts[:root],
-    text: opts[:text],
-    html: opts[:html],
-    json: opts[:json],
-    verbose: opts[:verbose],
-    collect_mode: opts[:collect_mode]
-  )
+if enable_env
+  begin
+    if enable_env == true
+      Lumitrace.enable!
+    elsif enable_env.is_a?(String)
+      opts = Lumitrace.parse_enable_args(enable_env)
+      Lumitrace.enable!(
+        max_samples: opts[:max_samples],
+        ranges_by_file: opts[:ranges_by_file],
+        root: opts[:root],
+        text: opts[:text],
+        html: opts[:html],
+        json: opts[:json],
+        verbose: opts[:verbose],
+        collect_mode: opts[:collect_mode]
+      )
+    end
+  rescue ScriptError, StandardError => e
+    # Fail-safe: tracing was auto-enabled via env (e.g. RUBYOPT=-rlumitrace in CI).
+    # A failure here must never take down the host process / test run — disable
+    # tracing and carry on. (Explicit Lumitrace.enable! calls still raise.)
+    warn "lumitrace: tracing disabled (enable failed: #{e.class}: #{e.message})"
+  end
 end
