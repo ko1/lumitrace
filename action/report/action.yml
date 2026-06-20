@@ -33,6 +33,14 @@ runs:
       run: |
         set -euo pipefail
 
+        # setup left lumitrace active in the env (RUBYOPT=-rlumitrace + LUMITRACE_*).
+        # Turn it OFF here: otherwise the ruby we run below (build_check.rb, the
+        # OIDC parsing) would re-trace and OVERWRITE the test's output file with an
+        # empty result before we read/upload it.
+        unset RUBYOPT RUBYLIB LUMITRACE_ENABLE LUMITRACE_JSON LUMITRACE_HTML \
+              LUMITRACE_TEXT LUMITRACE_GIT_DIFF LUMITRACE_RANGE LUMITRACE_ROOT \
+              LUMITRACE_COLLECT_MODE LUMITRACE_MAX_SAMPLES LUMITRACE_VERBOSE
+
         OUT="${{ inputs.output }}"
         if [ ! -s "$OUT" ]; then
           echo "lumitrace: no trace output at $OUT (diff had no traced lines?) — skipping check."
