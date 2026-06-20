@@ -81,12 +81,21 @@ runs:
                   "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${{ inputs.audience }}" 2>/dev/null \
                   | ruby -rjson -e 'begin; print JSON.parse(STDIN.read)["value"]; rescue; end' || true)"
           if [ -n "$OIDC" ]; then
-            HTML="${{ inputs.html }}"
+            # gzip the (highly compressible) JSON/HTML before upload — a big diff
+            # can produce MB-scale reports, and this is paid on every run. The
+            # server stores and serves the gzip bytes as-is.
+            tmp="${RUNNER_TEMP:-/tmp}"
+            json_up="$OUT"
+            gzip -c "$OUT" > "$tmp/lumitrace.json.gz" 2>/dev/null && json_up="$tmp/lumitrace.json.gz"
             html_field=()
-            [ -s "$HTML" ] && html_field=(-F "html=@${HTML}")
+            if [ -s "$HTML" ]; then
+              html_up="$HTML"
+              gzip -c "$HTML" > "$tmp/lumitrace.html.gz" 2>/dev/null && html_up="$tmp/lumitrace.html.gz"
+              html_field=(-F "html=@${html_up}")
+            fi
             VIEW="$(curl -sS -X POST "${ENDPOINT}/api/v1/upload" \
                     -H "Authorization: Bearer $OIDC" \
-                    -F "json=@${OUT}" "${html_field[@]}" 2>/dev/null \
+                    -F "json=@${json_up}" "${html_field[@]}" 2>/dev/null \
                     | ruby -rjson -e 'begin; print JSON.parse(STDIN.read)["view_url"]; rescue; end' || true)"
             [ -n "$VIEW" ] && DETAILS="${ENDPOINT}${VIEW}"
           fi
