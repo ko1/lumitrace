@@ -68,6 +68,14 @@ runs:
             ;;
         esac
 
+        # One shared results dir for the whole job, with a sentinel parent pid
+        # (0) so EVERY traced process — across every test step, forks and spawns
+        # — just writes its own per-pid result file here and none tries to
+        # finalize. The report action merges them all. This is what lets a job
+        # split its tests across multiple `run:` steps and still get one report.
+        RESULTS_DIR="${RUNNER_TEMP:-/tmp}/lumitrace-results"
+        mkdir -p "$RESULTS_DIR"
+
         {
           echo "RUBYLIB=${LUMI_LIB}${RUBYLIB:+:$RUBYLIB}"
           echo "RUBYOPT=-rlumitrace ${RUBYOPT:-}"
@@ -77,6 +85,8 @@ runs:
           echo "LUMITRACE_ROOT=${{ github.workspace }}"
           echo "LUMITRACE_COLLECT_MODE=${{ inputs.collect-mode }}"
           echo "LUMITRACE_GIT_DIFF=${DIFF}"
+          echo "LUMITRACE_RESULTS_DIR=${RESULTS_DIR}"
+          echo "LUMITRACE_RESULTS_PARENT_PID=0"
         } >> "$GITHUB_ENV"
 
         echo "lumitrace enabled: mode=${{ inputs.collect-mode }} diff=${DIFF} out=${{ inputs.output }} lib=${LUMI_LIB}"

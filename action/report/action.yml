@@ -33,15 +33,34 @@ runs:
       run: |
         set -euo pipefail
 
+        OUT="${{ inputs.output }}"
+        HTML="${{ inputs.html }}"
+        # Capture the tracing config before we disable it (the merge below reuses it).
+        LUMI_LIB="$(cd "$GITHUB_ACTION_PATH/../.." && pwd)/lib"
+        LUMI_EXE="$(cd "$GITHUB_ACTION_PATH/../.." && pwd)/exe/lumitrace"
+        RESULTS_DIR="${LUMITRACE_RESULTS_DIR:-}"
+        ROOT="${LUMITRACE_ROOT:-$GITHUB_WORKSPACE}"
+        DIFF="${LUMITRACE_GIT_DIFF:-}"
+        MODE="${LUMITRACE_COLLECT_MODE:-last}"
+
         # setup left lumitrace active in the env (RUBYOPT=-rlumitrace + LUMITRACE_*).
-        # Turn it OFF here: otherwise the ruby we run below (build_check.rb, the
-        # OIDC parsing) would re-trace and OVERWRITE the test's output file with an
-        # empty result before we read/upload it.
+        # Turn it OFF so the ruby we run below (the merge, build_check, OIDC
+        # parsing) is not itself traced.
         unset RUBYOPT RUBYLIB LUMITRACE_ENABLE LUMITRACE_JSON LUMITRACE_HTML \
               LUMITRACE_TEXT LUMITRACE_GIT_DIFF LUMITRACE_RANGE LUMITRACE_ROOT \
-              LUMITRACE_COLLECT_MODE LUMITRACE_MAX_SAMPLES LUMITRACE_VERBOSE
+              LUMITRACE_COLLECT_MODE LUMITRACE_MAX_SAMPLES LUMITRACE_VERBOSE \
+              LUMITRACE_RESULTS_DIR LUMITRACE_RESULTS_PARENT_PID
 
-        OUT="${{ inputs.output }}"
+        # Finalize: combine every step's / every process's per-pid result files
+        # into one JSON + HTML. (Each test step wrote child files into the shared
+        # dir instead of finalizing, so splitting tests across steps still yields
+        # one report.) HTML range context is recomputed from the same diff.
+        if [ -n "$RESULTS_DIR" ] && ls "$RESULTS_DIR"/child_*.json >/dev/null 2>&1; then
+          ruby -I"$LUMI_LIB" "$LUMI_EXE" merge "$RESULTS_DIR" \
+            --json "$OUT" --html "$HTML" --root "$ROOT" --collect-mode "$MODE" \
+            ${DIFF:+--git-diff "$DIFF"} || true
+        fi
+
         if [ ! -s "$OUT" ]; then
           echo "lumitrace: no trace output at $OUT (diff had no traced lines?) — skipping check."
           exit 0
