@@ -199,6 +199,46 @@ module Lumitrace
     File.join(@results_dir, "child_#{Process.pid}_#{ts}.json")
   end
 
+  # Combine all per-process child result files written into `dir` (by any number
+  # of processes / workflow steps that shared LUMITRACE_RESULTS_DIR) into final
+  # JSON / HTML / text outputs. Used by `lumitrace merge` so a job can split its
+  # tests across several steps and still produce one report. ranges_by_file (for
+  # HTML/text context) is recomputed from the same diff/range options.
+  def self.merge_results_dir(dir, json: nil, html: nil, text: nil, root: nil,
+                             collect_mode: nil, max_samples: nil, ranges_by_file: nil)
+    require_relative "lumitrace/record_instrument"
+    require_relative "lumitrace/generate_resulted_html"
+    root = File.expand_path(root || Dir.pwd)
+    collect_mode ||= "last"
+
+    events = RecordInstrument.merge_child_events([], dir, max_samples: max_samples,
+                                                 logger: (@verbose ? method(:verbose_log) : nil))
+
+    if json
+      json_path = File.expand_path(json, root)
+      RecordInstrument.dump_events_json(events, json_path)
+      notify_output_path("json", json_path)
+    end
+    if html
+      html_str = GenerateResultedHtml.render_all_from_normalized_events(
+        events, root: root, ranges_by_file: ranges_by_file,
+        collect_mode: collect_mode, max_samples: max_samples
+      )
+      html_path = File.expand_path(html, root)
+      File.write(html_path, html_str)
+      notify_output_path("html", html_path)
+    end
+    if text
+      text_str = GenerateResultedHtml.render_text_all_from_normalized_events(
+        events, root: root, ranges_by_file: ranges_by_file, tty: false
+      )
+      text_path = File.expand_path(text, root)
+      File.write(text_path, text_str)
+      notify_output_path("text", text_path)
+    end
+    events
+  end
+
 
   def self.serialize_ranges_by_file(ranges_by_file)
     return nil unless ranges_by_file

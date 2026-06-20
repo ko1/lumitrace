@@ -4,6 +4,51 @@
 require "rbconfig"
 require_relative "../lib/lumitrace"
 
+if ARGV.first == "merge"
+  ARGV.shift
+  require "optparse"
+  opts = { collect_mode: "last" }
+  parser = OptionParser.new do |o|
+    o.banner = "usage: lumitrace merge [DIR] [--json PATH] [--html PATH] [--text PATH] " \
+               "[--root DIR] [--collect-mode M] [--max-samples N] [--git-diff MODE] [--range SPEC]"
+    o.on("--json PATH") { |v| opts[:json] = v }
+    o.on("--html PATH") { |v| opts[:html] = v }
+    o.on("--text PATH") { |v| opts[:text] = v }
+    o.on("--root DIR") { |v| opts[:root] = v }
+    o.on("--collect-mode M") { |v| opts[:collect_mode] = v }
+    o.on("--max-samples N", Integer) { |v| opts[:max_samples] = v }
+    o.on("--git-diff MODE") { |v| opts[:git_diff] = v }
+    o.on("--range SPEC") { |v| (opts[:ranges] ||= []) << v }
+  end
+  begin
+    parser.parse!(ARGV)
+  rescue OptionParser::ParseError => e
+    warn e.message
+    exit 1
+  end
+  dir = ARGV.shift || ENV["LUMITRACE_RESULTS_DIR"]
+  unless dir && Dir.exist?(dir)
+    warn "lumitrace merge: results dir not found: #{dir.inspect}"
+    exit 1
+  end
+  # Recompute the diff/range coverage for HTML/text context (same options the
+  # traced run used). JSON output needs no ranges.
+  ranges = Lumitrace.resolve_ranges_by_file(
+    opts[:ranges] || [],
+    git_diff_mode: opts[:git_diff],
+    git_diff_context: nil,
+    git_cmd: nil,
+    git_diff_no_untracked: false
+  )
+  Lumitrace.merge_results_dir(
+    dir,
+    json: opts[:json], html: opts[:html], text: opts[:text],
+    root: opts[:root], collect_mode: opts[:collect_mode],
+    max_samples: opts[:max_samples], ranges_by_file: ranges
+  )
+  exit 0
+end
+
 if ARGV.first == "help"
   ARGV.shift
   begin
