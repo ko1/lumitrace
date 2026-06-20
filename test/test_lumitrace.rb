@@ -234,6 +234,32 @@ class LumiTraceTest < Minitest::Test
     end
   end
 
+  # Multiple processes (e.g. tests split across workflow steps) each write a
+  # child_*.json into a shared results dir; merge_results_dir combines them into
+  # one JSON without clobbering.
+  def test_merge_results_dir_combines_child_files
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "child_111_0.json"), JSON.dump([
+        { file: "/x/a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 5,
+          kind: "expr", total: 2, last_value: { type: "Integer", preview: "2" }, types: { "Integer" => 2 } }
+      ]))
+      File.write(File.join(dir, "child_222_0.json"), JSON.dump([
+        { file: "/x/b.rb", start_line: 3, start_col: 0, end_line: 3, end_col: 5,
+          kind: "expr", total: 1, last_value: { type: "String", preview: "\"hi\"" }, types: { "String" => 1 } }
+      ]))
+
+      Dir.mktmpdir do |out|
+        json_path = File.join(out, "merged.json")
+        Lumitrace.merge_results_dir(dir, json: json_path, root: "/x", collect_mode: "last")
+        data = JSON.parse(File.read(json_path))
+        files = data["events"].map { |e| e["file"] }.sort
+        assert_equal ["/x/a.rb", "/x/b.rb"], files
+      end
+      # child files are consumed by the merge
+      assert_empty Dir.glob(File.join(dir, "child_*.json"))
+    end
+  end
+
   def test_merge_events_applies_max_samples
     events = [
       { file: "a.rb", start_line: 1, start_col: 0, end_line: 1, end_col: 1, sampled_values: [1, 2], total: 2 },
