@@ -23,6 +23,11 @@ inputs:
   audience:
     description: "OIDC audience for the upload (only used when endpoint is set)."
     default: "lumitrace-ci"
+  comment:
+    description: >-
+      Post (and update) a sticky PR comment with the summary + report/JSON links.
+      Needs `permissions: pull-requests: write`; skipped silently otherwise. Set "false" to disable.
+    default: "true"
 runs:
   using: composite
   steps:
@@ -101,9 +106,29 @@ runs:
           fi
         fi
 
+        COMMENT_MD="$RUNNER_TEMP/lumitrace-comment.md"
         ruby "$GITHUB_ACTION_PATH/../build_check.rb" \
-          "$OUT" "$HEAD_SHA" "${{ github.workspace }}" "$DETAILS" > "$RUNNER_TEMP/lumitrace-check.json"
+          "$OUT" "$HEAD_SHA" "${{ github.workspace }}" "$DETAILS" "$COMMENT_MD" \
+          > "$RUNNER_TEMP/lumitrace-check.json"
 
         gh api "repos/${{ github.repository }}/check-runs" \
           --input "$RUNNER_TEMP/lumitrace-check.json" --silent
         echo "lumitrace: posted check run '${{ inputs.name }}' for ${HEAD_SHA}"
+
+        # Sticky PR comment: one comment per PR, edited on later pushes. Found by
+        # a hidden marker. Non-fatal — needs pull-requests: write, skipped otherwise.
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        if [ "${{ inputs.comment }}" = "true" ] && [ -n "$PR_NUMBER" ] && [ -s "$COMMENT_MD" ]; then
+          repo="${{ github.repository }}"
+          existing="$(gh api "repos/${repo}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '.[] | select(.body | contains("<!-- lumitrace-report -->")) | .id' 2>/dev/null | head -1 || true)"
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${repo}/issues/comments/${existing}" -F body=@"$COMMENT_MD" --silent 2>/dev/null \
+              && echo "lumitrace: updated PR comment" \
+              || echo "::warning title=lumitrace::could not update PR comment (need permissions: pull-requests: write?)"
+          else
+            gh api "repos/${repo}/issues/${PR_NUMBER}/comments" -F body=@"$COMMENT_MD" --silent 2>/dev/null \
+              && echo "lumitrace: posted PR comment" \
+              || echo "::warning title=lumitrace::could not post PR comment (need permissions: pull-requests: write?)"
+          fi
+        fi
