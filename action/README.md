@@ -21,9 +21,10 @@ name: test
 on: pull_request
 
 permissions:
-  checks: write     # post the check run
+  checks: write          # post the check run
   contents: read
-  id-token: write   # upload the report to lumitrace.atdot.net for a linked HTML report
+  id-token: write        # upload the report to lumitrace.atdot.net for a linked HTML report
+  pull-requests: write   # post a sticky PR comment (optional)
 
 jobs:
   test:
@@ -74,6 +75,7 @@ hosted report (nothing is uploaded anywhere).
 | `html` | `lumitrace.html` | HTML path (must match `setup`'s `html`); uploaded with the JSON. |
 | `endpoint` | `https://lumitrace.atdot.net` | Backend the report is uploaded to. Upload only happens when the workflow grants `id-token: write`; set to `""` to disable, or point at your own server. |
 | `audience` | `lumitrace-ci` | OIDC audience for the upload. |
+| `comment` | `true` | Post/update a sticky PR comment (summary + report/JSON links). Needs `pull-requests: write`; skipped silently otherwise. `false` to disable. |
 
 ## Notes
 
@@ -84,6 +86,11 @@ hosted report (nothing is uploaded anywhere).
   checkout works. (If you set `persist-credentials: false`, add `fetch-depth: 0`.)
 - **Fail-safe.** If lumitrace can't load on the runner's Ruby, `setup` warns and
   skips injection — your test step runs exactly as it would without this action.
+- **Sticky PR comment.** With `pull-requests: write`, `report` posts one comment
+  per PR (edited on later pushes) with the summary, recorded-value highlights, and
+  links to both the HTML report and the **raw JSON** — so you (or your own AI /
+  tooling) can pull the trace data. The JSON shape is documented by
+  `lumitrace schema --format json`.
 - **Hosted report is opt-in via `id-token: write`.** With that permission, `report`
   uploads to `lumitrace.atdot.net` (OIDC-authenticated, no shared secret) and links
   the check to the HTML report. Without it, nothing is uploaded — you just get the
