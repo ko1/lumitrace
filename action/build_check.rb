@@ -4,10 +4,7 @@
 # Convert a lumitrace JSON report into a GitHub "create a check run" payload,
 # printed as JSON on stdout.
 #
-#   build_check.rb <lumitrace.json> <head_sha> <root> [details_url] [comment_path]
-#
-# Prints the check-run payload as JSON on stdout. If comment_path is given, also
-# writes a sticky-PR-comment markdown body there (report + JSON-data links).
+#   build_check.rb <lumitrace.json> <head_sha> <root> [details_url]
 #
 # Annotation strategy (see the project plan): annotations are a *curated few*,
 # not every traced line. We surface uncovered changed lines first (most useful
@@ -22,9 +19,9 @@ MAX_ANNOTATIONS = 50
 # Cap value highlights (one per line) shown in the summary.
 HIGHLIGHT_LIMIT = 10
 
-json_path, head_sha, root, details_url, comment_path = ARGV
+json_path, head_sha, root, details_url = ARGV
 if json_path.nil? || head_sha.nil? || root.nil?
-  abort "usage: build_check.rb <lumitrace.json> <head_sha> <root> [details_url] [comment_path]"
+  abort "usage: build_check.rb <lumitrace.json> <head_sha> <root> [details_url]"
 end
 
 check_name = ENV.fetch("LUMITRACE_CHECK_NAME", "lumitrace")
@@ -114,7 +111,9 @@ unless highlights.empty?
   end
   summary << "- …and #{all_highlights.size - HIGHLIGHT_LIMIT} more\n" if highlights_truncated
 end
-summary << "\n[Full report ↗](#{details_url})\n" if details_url && !details_url.empty?
+if details_url && !details_url.empty?
+  summary << "\n[Full report ↗](#{details_url}) · [JSON for tooling/AI](#{details_url}/data)\n"
+end
 
 title =
   if uncovered.empty?
@@ -122,37 +121,6 @@ title =
   else
     "#{uncovered.size} uncovered · #{events.size} traced"
   end
-
-# Sticky PR comment body (optional). The hidden marker lets the action find and
-# update its own comment on later pushes. Surfaces both the human report and the
-# raw JSON URL so a reader (or their own AI/tooling) can pull the data.
-if comment_path
-  marker = "<!-- lumitrace-report -->"
-  comment = +"#{marker}\n### 🔦 Lumitrace — #{title}\n\n"
-  unless coverage.empty?
-    comment << "| File | Covered | % |\n|---|---|---|\n"
-    coverage.each do |c|
-      comment << "| `#{relativize.call(c["file"])}` | " \
-                 "#{c["covered_lines"]}/#{c["total_lines"]} | #{c["coverage_percent"]}% |\n"
-    end
-  end
-  comment << "\n⚠️ #{uncovered.size} changed line(s) never executed.\n" unless uncovered.empty?
-  unless highlights.empty?
-    comment << "\n<details><summary>Recorded values</summary>\n\n"
-    highlights.each do |e|
-      loc = "#{relativize.call(e["file"])}:#{e["start_line"]}"
-      name = e["name"] ? "`#{e["name"]}` " : ""
-      comment << "- `#{loc}` #{name}→ #{value_of.call(e)}\n"
-    end
-    comment << "- …and #{all_highlights.size - HIGHLIGHT_LIMIT} more\n" if highlights_truncated
-    comment << "\n</details>\n"
-  end
-  if details_url && !details_url.empty?
-    comment << "\n**[Full report ↗](#{details_url})**"
-    comment << " · [JSON for tooling/AI](#{details_url}/data)\n"
-  end
-  File.write(comment_path, comment)
-end
 
 payload = {
   "name" => check_name,
