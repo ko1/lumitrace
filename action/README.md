@@ -55,7 +55,7 @@ One CI run, three places — each more detailed than the last:
    │  setup turns tracing on, your tests run, report collects the result
    ▼
  ┌─────────────────────────────────────────────────────────────────────┐
- │ ① Files changed   ⚠ annotation on each changed line never executed   │  checks: write
+ │ ① Files changed   ⚠ annotation only on changed lines never covered   │  checks: write
  │ ② Checks tab      summary: coverage table, value highlights, links   │  checks: write
  │ ③ Hosted report   full HTML, recorded values overlaid on every line  │  id-token: write
  └─────────────────────────────────────────────────────────────────────┘
@@ -68,8 +68,8 @@ One CI run, three places — each more detailed than the last:
 | ② | PR **Checks tab** | Title (`N uncovered · M traced`), per-file coverage table, a few value highlights, and links to ③ and the raw JSON | `checks: write` |
 | ③ | **lumitrace.atdot.net/r/…** | The full report: every traced line annotated with its recorded value/type | `id-token: write` |
 
-The check is **neutral** — it never blocks CI. ③ is optional: drop `id-token: write`
-and you still get ① + ②, with no upload anywhere.
+The check is **neutral** — it never blocks CI. Only ③ needs `id-token: write`;
+without it you still get ① + ②.
 
 ## Inputs
 
