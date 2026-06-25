@@ -46,14 +46,30 @@ That's the whole integration: two steps plus a `permissions:` block. Drop
 `id-token: write` and you still get the PR check — just without the linked
 hosted report (nothing is uploaded anywhere).
 
-## What you get
+## Where results appear
 
-- A `lumitrace` check on the PR with conclusion **neutral** — it never blocks CI.
-- A **summary** (Checks tab): per-file coverage of the changed range, plus a few
-  recorded-value highlights.
-- **Inline annotations** only on changed lines that were **never executed**
-  (`total = 0`). Recorded values are *not* annotated on every line — they go to
-  the summary (and, if you wire up a backend, a full HTML report).
+One CI run, three places — each more detailed than the last:
+
+```
+ PR push
+   │  setup turns tracing on, your tests run, report collects the result
+   ▼
+ ┌─────────────────────────────────────────────────────────────────────┐
+ │ ① Files changed   ⚠ annotation on each changed line never executed   │  checks: write
+ │ ② Checks tab      summary: coverage table, value highlights, links   │  checks: write
+ │ ③ Hosted report   full HTML, recorded values overlaid on every line  │  id-token: write
+ └─────────────────────────────────────────────────────────────────────┘
+     ① + ② are the PR check itself.   ② links to ③ (details_url).
+```
+
+| | Surface | Shows | Needs |
+|---|---|---|---|
+| ① | PR **Files changed** | Inline annotation **only on uncovered** changed lines (`total = 0`) — values are *not* put on every line, to keep the diff readable | `checks: write` |
+| ② | PR **Checks tab** | Title (`N uncovered · M traced`), per-file coverage table, a few value highlights, and links to ③ and the raw JSON | `checks: write` |
+| ③ | **lumitrace.atdot.net/r/…** | The full report: every traced line annotated with its recorded value/type | `id-token: write` |
+
+The check is **neutral** — it never blocks CI. ③ is optional: drop `id-token: write`
+and you still get ① + ②, with no upload anywhere.
 
 ## Inputs
 
