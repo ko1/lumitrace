@@ -14,6 +14,7 @@ Lumitrace instruments Ruby source code at load time, records expression results,
 - [AI Schema](https://ko1.github.io/lumitrace/docs/ai-schema.html)
 - [Supported Syntax](https://ko1.github.io/lumitrace/docs/supported_syntax.html)
 - [GitHub repository](https://github.com/ko1/lumitrace)
+- [GitHub Action](https://github.com/ko1/lumitrace-action): trace a PR's changed lines in CI and post the results as a Check Run
 
 ## Blog Articles
 
